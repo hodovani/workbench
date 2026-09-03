@@ -4,7 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>News Feed: Level 1</title>
+  <meta name="description" content="Ultra-fast local AI news feed with DOM virtualization, lookahead prefetching, and behavior-driven personalization.">
+  <meta name="theme-color" content="#0f172a">
+  <title>News Feed: Personalized</title>
   <style>
     * {
       box-sizing: border-box;
@@ -18,12 +20,76 @@
       color: #f8fafc;
       display: flex;
       justify-content: center;
-      padding: 2rem 1rem;
+      padding: 1.5rem 1rem 3rem 1rem;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     .feed-container {
       width: 100%;
       max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .feed-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #334155;
+    }
+
+    .feed-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .feed-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .persona-badge {
+      font-size: 0.75rem;
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: #38bdf8;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .topic-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .topic-pill {
+      font-size: 0.7rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .topic-pill.active {
+      color: #38bdf8;
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    #postsList {
       display: flex;
       flex-direction: column;
       gap: 1rem;
@@ -36,6 +102,9 @@
       padding: 1.25rem;
       display: flex;
       gap: 1rem;
+      min-height: 120px;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 130px;
     }
 
     .avatar {
@@ -49,6 +118,7 @@
       font-weight: bold;
       color: #0f172a;
       flex-shrink: 0;
+      user-select: none;
     }
 
     .post-content {
@@ -78,11 +148,12 @@
       font-size: 0.95rem;
       line-height: 1.5;
       color: #e2e8f0;
+      word-break: break-word;
     }
 
     .post-actions {
       display: flex;
-      margin-top: 0.5rem;
+      margin-top: 0.25rem;
     }
 
     .like-btn {
@@ -96,43 +167,153 @@
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      transition: all 0.2s ease;
+      transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      touch-action: manipulation;
+      will-change: transform;
+    }
+
+    .like-btn:hover {
+      border-color: #64748b;
+      color: #f1f5f9;
+    }
+
+    .like-btn:active {
+      transform: scale(0.92);
     }
 
     .like-btn.liked {
       color: #f43f5e;
       border-color: #f43f5e;
-      background: rgba(244, 63, 94, 0.1);
+      background: rgba(244, 63, 94, 0.12);
     }
 
-    .load-more-btn {
+    .like-btn.liked span:first-child {
+      animation: heart-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes heart-pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.35); }
+      100% { transform: scale(1); }
+    }
+
+    /* Floating Back to Top Button */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
       background: #2563eb;
       color: white;
       border: none;
-      border-radius: 8px;
-      padding: 0.75rem;
+      border-radius: 9999px;
+      padding: 0.6rem 1rem;
       font-weight: 600;
+      font-size: 0.85rem;
       cursor: pointer;
-      margin-top: 0.5rem;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
     }
 
-    #postsList {
+    .back-to-top:hover {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+    }
+
+    #scrollSentinel {
+      height: 60px;
       display: flex;
-      flex-direction: column;
-      gap: 1rem;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    .hidden {
+      display: none !important;
     }
   </style>
 </head>
 
 <body>
 
-  <main class="feed-container" id="feed">
+  <main class="feed-container" id="feed" role="feed" aria-label="News Feed">
+    <header class="feed-header">
+      <div class="feed-title-row">
+        <h1 class="feed-title">Developer Feed</h1>
+        <span id="personaBadge" class="persona-badge hidden">🎯 Learning interests...</span>
+      </div>
+      <div id="topicPills" class="topic-pills"></div>
+    </header>
+
+    <div id="topSpacer" style="height: 0px;"></div>
     <div id="postsList"></div>
-    <button class="load-more-btn" id="loadMoreBtn">Load More</button>
+    <div id="bottomSpacer" style="height: 0px;"></div>
+
+    <div id="scrollSentinel" aria-live="polite">
+      <span id="sentinelText" class="hidden">Generating more posts...</span>
+    </div>
+
+    <button id="backToTopBtn" class="back-to-top hidden" aria-label="Scroll back to top">
+      <span>↑</span><span>Top</span>
+    </button>
   </main>
 
   <script>
-    const fallbackPosts = [
+    const CACHE_KEY = 'NEWS_FEED_CACHE_V1';
+    const PROFILE_KEY = 'NEWS_FEED_USER_PROFILE_V1';
+    const TRIGGER_LOOKAHEAD_COUNT = 5;
+
+    // Virtual Window Settings
+    const CARD_HEIGHT_ESTIMATE = 145; // Average card height (including gap)
+    const MAX_VISIBLE_WINDOW = 16;     // At most 16 cards in DOM at any time
+    const WINDOW_BUFFER = 4;           // Overscan buffer for smooth scrolling
+
+    // Topic Taxonomy for Telemetry & Personalization
+    const TOPIC_KEYWORDS = {
+      "Performance & Latency": ["profiling", "optimize", "cache", "latency", "benchmark", "fast", "performance", "memory", "leak", "speed", "inp", "lcp"],
+      "CSS & Modern Web": ["css", "html", "subgrid", "layout", "container queries", "animation", "frontend", "ui", "responsive", "web", "browser", "dom"],
+      "Databases & Systems": ["database", "query", "server", "worker", "architecture", "scale", "sql", "api", "serverless", "backend", "cloud"],
+      "AI & Dev Tooling": ["ai", "prompt", "llm", "gemini", "model", "git", "tests", "debugging", "developer", "tooling", "refactor"]
+    };
+
+    const fallbackTemplates = [
+      { name: "Alex Rivera", handle: "@alex_r", text: "Pro-tip: profiling before optimizing saves days of premature architecture." },
+      { name: "Elena Rostova", handle: "@elena_dev", text: "CSS subgrid and container queries completely eliminated my need for complex resize listeners." },
+      { name: "Marcus Brody", handle: "@mbrody", text: "Shipped the new cache invalidation worker today. 0 downtime, 4x latency reduction." },
+      { name: "Devon Vance", handle: "@devon_v", text: "The best dependency is the one you did not install. Native platform APIs are unmatched." },
+      { name: "Kenji Sato", handle: "@kenji_s", text: "Automated end-to-end regression tests running in parallel cut our release cycle from hours to minutes." },
+      { name: "Sofia Morales", handle: "@sofia_m", text: "Writing clean commit messages makes git bisect feel like a superpower during incident triage." },
+      { name: "Liam O'Connor", handle: "@liam_oc", text: "Replaced our heavy state management library with native URL search parameters and localStorage. Instant speedup." },
+      { name: "Amina Diallo", handle: "@amina_tech", text: "Measuring Interaction to Next Paint (INP) caught 3 long tasks we never noticed in DevTools." },
+      { name: "Chloe Dupont", handle: "@chloe_d", text: "Browser on-device AI completely removes server egress fees for local summarizing and micro-copy." },
+      { name: "Carlos Mendez", handle: "@carlos_m", text: "Using IntersectionObserver with lookahead offsets gives infinite scroll a zero-latency native app feel." }
+    ];
+
+    let fallbackIndex = 0;
+    function generateFallbackBatch(count = 6) {
+      const now = Date.now();
+      return Array.from({ length: count }, (_, i) => {
+        const tpl = fallbackTemplates[(fallbackIndex++) % fallbackTemplates.length];
+        return {
+          id: `p_${now}_${i}`,
+          author: {
+            name: tpl.name,
+            handle: tpl.handle,
+            avatarText: tpl.name[0]
+          },
+          text: tpl.text,
+          likes: Math.floor(Math.random() * 60) + 5,
+          isLiked: false
+        };
+      });
+    }
+
+    // 10 initial starter posts
+    const initialStarterPosts = [
       {
         id: "p1",
         author: { name: "Matvii Hodovaniuk", handle: "@hodovani", avatarText: "M" },
@@ -146,20 +327,355 @@
         text: "The best system design insight: build the simplest version first. Learn what breaks before abstracting.",
         likes: 45,
         isLiked: false
+      },
+      {
+        id: "p3",
+        author: { name: "Alex Rivera", handle: "@alex_r", avatarText: "A" },
+        text: "Pro-tip: profiling before optimizing saves days of premature architecture.",
+        likes: 34,
+        isLiked: false
+      },
+      {
+        id: "p4",
+        author: { name: "Elena Rostova", handle: "@elena_dev", avatarText: "E" },
+        text: "CSS subgrid and container queries completely eliminated my need for complex resize listeners.",
+        likes: 29,
+        isLiked: false
+      },
+      {
+        id: "p5",
+        author: { name: "Marcus Brody", handle: "@mbrody", avatarText: "M" },
+        text: "Shipped the new cache invalidation worker today. 0 downtime, 4x latency reduction.",
+        likes: 51,
+        isLiked: false
+      },
+      {
+        id: "p6",
+        author: { name: "Devon Vance", handle: "@devon_v", avatarText: "D" },
+        text: "The best dependency is the one you did not install. Native platform APIs are unmatched.",
+        likes: 67,
+        isLiked: false
+      },
+      {
+        id: "p7",
+        author: { name: "Kenji Sato", handle: "@kenji_s", avatarText: "K" },
+        text: "Automated end-to-end regression tests running in parallel cut our release cycle from hours to minutes.",
+        likes: 22,
+        isLiked: false
+      },
+      {
+        id: "p8",
+        author: { name: "Sofia Morales", handle: "@sofia_m", avatarText: "S" },
+        text: "Writing clean commit messages makes git bisect feel like a superpower during incident triage.",
+        likes: 38,
+        isLiked: false
+      },
+      {
+        id: "p9",
+        author: { name: "Liam O'Connor", handle: "@liam_oc", avatarText: "L" },
+        text: "Replaced our heavy state management library with native URL search parameters and localStorage. Instant speedup.",
+        likes: 41,
+        isLiked: false
+      },
+      {
+        id: "p10",
+        author: { name: "Amina Diallo", handle: "@amina_tech", avatarText: "A" },
+        text: "Measuring Interaction to Next Paint (INP) caught 3 long tasks we never noticed in DevTools.",
+        likes: 58,
+        isLiked: false
       }
     ];
 
     let posts = [];
+    let windowStart = 0;
+    let windowEnd = 10;
+    let aiSession = null;
+    let aiSessionPromise = null;
+    let isLoading = false;
+    let prefetchQueue = [];
+    let isPrefetching = false;
+    let lastScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    let currentTriggerEl = null;
 
-    async function generateAIPosts(count = 2) {
-      console.log(`[Prompt API] Checking availability for ${count} posts...`);
-      const LM = window.LanguageModel || globalThis.LanguageModel || window.ai?.languageModel;
-      if (!LM) {
-        console.warn('[Prompt API] LanguageModel is not available in this browser. Falling back to static data.');
-        return null;
+    // --- On-Device Personalization Engine ---
+    let userProfile = loadUserProfile();
+
+    function loadUserProfile() {
+      try {
+        const raw = localStorage.getItem(PROFILE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return {
+        topicScores: {
+          "Performance & Latency": 0,
+          "CSS & Modern Web": 0,
+          "Databases & Systems": 0,
+          "AI & Dev Tooling": 0
+        },
+        totalLikes: 0,
+        totalDwells: 0
+      };
+    }
+
+    function saveUserProfile() {
+      try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
+      } catch (e) {}
+      updatePersonaUI();
+    }
+
+    function classifyPostTopics(text) {
+      const lower = text.toLowerCase();
+      const matched = [];
+      for (const [topic, words] of Object.entries(TOPIC_KEYWORDS)) {
+        for (const w of words) {
+          if (lower.includes(w)) {
+            matched.push(topic);
+            break;
+          }
+        }
+      }
+      return matched;
+    }
+
+    function recordInteraction(post, type) {
+      const topics = classifyPostTopics(post.text);
+      const weight = type === 'like' ? 5 : (type === 'dwell' ? 2 : 1);
+
+      topics.forEach(t => {
+        userProfile.topicScores[t] = (userProfile.topicScores[t] || 0) + weight;
+      });
+
+      if (type === 'like') {
+        userProfile.totalLikes++;
+      } else if (type === 'dwell') {
+        userProfile.totalDwells++;
       }
 
+      console.log(`[Personalization] Recorded ${type} interaction. Updated weights:`, userProfile.topicScores);
+      saveUserProfile();
+    }
+
+    function getTopUserInterests() {
+      return Object.entries(userProfile.topicScores)
+        .filter(([_, score]) => score > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([topic]) => topic);
+    }
+
+    function updatePersonaUI() {
+      const badge = document.getElementById('personaBadge');
+      const pillsContainer = document.getElementById('topicPills');
+      if (!badge || !pillsContainer) return;
+
+      const top = getTopUserInterests();
+      if (top.length > 0) {
+        badge.textContent = `🎯 Tailored: ${top[0]}`;
+        badge.classList.remove('hidden');
+
+        pillsContainer.innerHTML = '';
+        Object.keys(TOPIC_KEYWORDS).forEach(t => {
+          const pill = document.createElement('span');
+          pill.className = `topic-pill ${top.includes(t) ? 'active' : ''}`;
+          pill.textContent = t;
+          pillsContainer.appendChild(pill);
+        });
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    // --- Dwell Time Telemetry with IntersectionObserver ---
+    const dwellTimers = new Map();
+    const dwellObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const postId = entry.target.id.replace('post-', '');
+        if (entry.isIntersecting) {
+          dwellTimers.set(postId, performance.now());
+        } else {
+          if (dwellTimers.has(postId)) {
+            const start = dwellTimers.get(postId);
+            const duration = performance.now() - start;
+            dwellTimers.delete(postId);
+            if (duration >= 2200) { // Spent >= 2.2 seconds reading this post
+              const post = posts.find(p => p.id === postId);
+              if (post) {
+                console.log(`[Telemetry] High dwell time on post ${postId} (${Math.round(duration)}ms)`);
+                recordInteraction(post, 'dwell');
+              }
+            }
+          }
+        }
+      });
+    }, { threshold: 0.6 });
+
+    // --- Storage Operations ---
+    function loadCachedPosts() {
       try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('[Feed] Error reading cached posts from localStorage:', e);
+      }
+      return null;
+    }
+
+    function persistPosts() {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(posts));
+      } catch (e) {
+        console.warn('[Feed] Error persisting posts to localStorage:', e);
+      }
+    }
+
+    // --- Card Factory ---
+    function createPostCardElement(post) {
+      const card = document.createElement('article');
+      card.className = 'post-card';
+      card.id = `post-${post.id}`;
+      card.innerHTML = `
+        <div class="avatar" aria-hidden="true">${post.author.avatarText}</div>
+        <div class="post-content">
+          <div class="post-header">
+            <span class="author-name">${post.author.name}</span>
+            <span class="author-handle">${post.author.handle}</span>
+          </div>
+          <p class="post-text">${post.text}</p>
+          <div class="post-actions">
+            <button class="like-btn ${post.isLiked ? 'liked' : ''}" 
+                    data-id="${post.id}" 
+                    aria-label="Like post by ${post.author.name}" 
+                    aria-pressed="${post.isLiked}">
+              <span>${post.isLiked ? '❤️' : '🤍'}</span>
+              <span class="like-count">${post.likes}</span>
+            </button>
+          </div>
+        </div>
+      `;
+      dwellObserver.observe(card);
+      return card;
+    }
+
+    // --- Sliding Window Virtualization (DOM Windowing) ---
+    function renderVirtualWindow(start, end) {
+      windowStart = Math.max(0, start);
+      windowEnd = Math.min(posts.length, end);
+
+      const topSpacer = document.getElementById('topSpacer');
+      const bottomSpacer = document.getElementById('bottomSpacer');
+      const postsList = document.getElementById('postsList');
+
+      topSpacer.style.height = `${windowStart * CARD_HEIGHT_ESTIMATE}px`;
+      bottomSpacer.style.height = `${(posts.length - windowEnd) * CARD_HEIGHT_ESTIMATE}px`;
+
+      const visibleSlice = posts.slice(windowStart, windowEnd);
+      const fragment = document.createDocumentFragment();
+      visibleSlice.forEach(post => {
+        fragment.appendChild(createPostCardElement(post));
+      });
+
+      postsList.innerHTML = '';
+      postsList.appendChild(fragment);
+
+      updateLookaheadTrigger();
+      console.log(`[Virtual DOM] Active window: [${windowStart}..${windowEnd}] (${visibleSlice.length} DOM nodes for ${posts.length} total posts)`);
+    }
+
+    function updateVirtualScrollWindow() {
+      if (posts.length <= MAX_VISIBLE_WINDOW) return;
+
+      const scrollY = window.scrollY;
+      const estimatedTop = Math.floor(scrollY / CARD_HEIGHT_ESTIMATE);
+      const newStart = Math.max(0, estimatedTop - WINDOW_BUFFER);
+      const newEnd = Math.min(posts.length, newStart + MAX_VISIBLE_WINDOW);
+
+      // Only re-render if window shifted by at least 2 items
+      if (Math.abs(newStart - windowStart) >= 2) {
+        renderVirtualWindow(newStart, newEnd);
+      }
+    }
+
+    // --- Dynamic Lookahead Trigger ---
+    const lookaheadObserver = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      const isScrollingDown = window.scrollY >= lastScrollY;
+      lastScrollY = window.scrollY;
+
+      if (entry.isIntersecting && isScrollingDown) {
+        console.log(`[Feed] User reached 5th post from bottom (Lookahead Trigger)! Pre-generating next batch...`);
+        loadMorePosts();
+      }
+    }, { rootMargin: '300px' });
+
+    function updateLookaheadTrigger() {
+      if (currentTriggerEl) {
+        lookaheadObserver.unobserve(currentTriggerEl);
+        currentTriggerEl = null;
+      }
+
+      const postsList = document.getElementById('postsList');
+      const cards = postsList.children;
+      if (cards.length === 0) return;
+
+      // Position the trigger 5 posts before the end of the full feed (if currently in DOM)
+      const globalTriggerIndex = Math.max(0, posts.length - TRIGGER_LOOKAHEAD_COUNT);
+      const relativeIndex = globalTriggerIndex - windowStart;
+
+      if (relativeIndex >= 0 && relativeIndex < cards.length) {
+        currentTriggerEl = cards[relativeIndex];
+        lookaheadObserver.observe(currentTriggerEl);
+        console.log(`[Feed] Lookahead trigger primed on post #${globalTriggerIndex + 1} of ${posts.length}`);
+      } else if (cards.length > 0) {
+        // Fallback to last visible card
+        currentTriggerEl = cards[cards.length - 1];
+        lookaheadObserver.observe(currentTriggerEl);
+      }
+    }
+
+    // Safety fallback observer for bottom sentinel
+    const bottomObserver = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        loadMorePosts();
+      }
+    }, { rootMargin: '400px' });
+
+    // --- Back to Top & Scroll Direction Handler ---
+    const backToTopBtn = document.getElementById('backToTopBtn');
+    window.addEventListener('scroll', () => {
+      const scrollY = window.scrollY;
+      if (scrollY > 600) {
+        backToTopBtn.classList.remove('hidden');
+      } else {
+        backToTopBtn.classList.add('hidden');
+      }
+
+      updateVirtualScrollWindow();
+      lastScrollY = scrollY;
+    }, { passive: true });
+
+    backToTopBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Reset window to top
+      renderVirtualWindow(0, Math.min(posts.length, MAX_VISIBLE_WINDOW));
+    });
+
+    // --- Persistent AI Session ---
+    async function getAISession() {
+      if (aiSession) return aiSession;
+      if (aiSessionPromise) return aiSessionPromise;
+
+      aiSessionPromise = (async () => {
+        const LM = window.LanguageModel || globalThis.LanguageModel || window.ai?.languageModel;
+        if (!LM) {
+          console.warn('[Prompt API] LanguageModel not supported in this environment.');
+          return null;
+        }
+
         const availability = await (LM.availability
           ? LM.availability({
               expectedInputs: [{ type: 'text', languages: ['en'] }],
@@ -167,16 +683,14 @@
             })
           : LM.capabilities?.());
 
-        console.log('[Prompt API] Availability status:', availability);
-
         const status = typeof availability === 'string' ? availability : availability?.available;
         if (status === 'unavailable' || status === 'no') {
-          console.warn('[Prompt API] LanguageModel is unavailable on this device.');
+          console.warn('[Prompt API] LanguageModel is unavailable.');
           return null;
         }
 
-        console.log('[Prompt API] Creating session...');
-        const session = await LM.create({
+        console.log('[Prompt API] Initializing persistent model session in background...');
+        aiSession = await LM.create({
           expectedInputs: [{ type: 'text', languages: ['en'] }],
           expectedOutputs: [{ type: 'text', languages: ['en'] }],
           initialPrompts: [
@@ -187,24 +701,59 @@
           ],
           monitor(m) {
             m.addEventListener('downloadprogress', (e) => {
-              console.log(`[Prompt API] Model download progress: ${Math.round(e.loaded * 100)}%`);
+              console.log(`[Prompt API] Download progress: ${Math.round(e.loaded * 100)}%`);
             });
           }
         });
 
-        const prompt = `Generate ${count} short tech micro-posts. Return ONLY a valid JSON array of objects with keys: "name", "handle", "text". Example: [{"name":"Alex","handle":"@alex","text":"Testing Prompt API."}]`;
-        console.log('[Prompt API] Prompting model with:', prompt);
+        return aiSession;
+      })();
+
+      return aiSessionPromise;
+    }
+
+    function warmupAI() {
+      const run = async () => {
+        try {
+          const session = await getAISession();
+          if (session) {
+            prefetchNextBatch();
+          }
+        } catch (e) {
+          console.warn('[Prompt API] Warmup failed:', e);
+        }
+      };
+
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 2500 });
+      } else {
+        setTimeout(run, 150);
+      }
+    }
+
+    // --- Personalized AI Post Generation ---
+    async function generateAIPosts(count = 6) {
+      console.log(`[Prompt API] Requesting ${count} posts with user personalization...`);
+      try {
+        const session = await getAISession();
+        if (!session) return null;
+
+        // Construct customized prompt from user interest signals
+        const topInterests = getTopUserInterests();
+        let prompt = `Generate ${count} short tech micro-posts.`;
+        if (topInterests.length > 0) {
+          const primary = topInterests[0];
+          const secondary = topInterests[1] || primary;
+          prompt += ` The reader is specifically engaged in topics around "${primary}" and "${secondary}". Align the majority of the posts to these subjects with realistic insights.`;
+        }
+        prompt += ` Return ONLY a valid JSON array of objects with keys: "name", "handle", "text". Example: [{"name":"Alex","handle":"@alex","text":"Testing Prompt API."}]`;
 
         const response = await session.prompt(prompt);
         console.log('[Prompt API] Raw model response:', response);
 
-        if (typeof session.destroy === 'function') {
-          session.destroy();
-        }
-
         const cleaned = response.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
         const data = JSON.parse(cleaned);
-        console.log('[Prompt API] Parsed posts:', data);
+        console.log(`[Prompt API] Parsed ${data.length} posts:`, data);
 
         return data.map((item, index) => ({
           id: `p_${Date.now()}_${index}`,
@@ -223,89 +772,94 @@
       }
     }
 
-    function renderPosts() {
-      const postsList = document.getElementById('postsList');
-      postsList.innerHTML = '';
-      posts.forEach(post => {
-        const postCard = document.createElement('div');
-        postCard.className = 'post-card';
-        postCard.innerHTML = `
-          <div class="avatar">${post.author.avatarText}</div>
-          <div class="post-content">
-            <div class="post-header">
-              <span class="author-name">${post.author.name}</span>
-              <span class="author-handle">${post.author.handle}</span>
-            </div>
-            <div class="post-text">${post.text}</div>
-            <div class="post-actions">
-              <button class="like-btn" data-id="${post.id}">
-                <span>${post.isLiked ? '❤️' : '🤍'}</span>
-                <span>${post.likes}</span>
-              </button>
-            </div>
-          </div>
-        `;
-        postsList.appendChild(postCard);
-      });
+    // --- Background Prefetch Worker ---
+    async function prefetchNextBatch() {
+      if (isPrefetching || prefetchQueue.length >= 12) return;
+      isPrefetching = true;
+      console.log('[Feed] Prefetching next personalized batch in background...');
+
+      const items = await generateAIPosts(6);
+      if (items && items.length) {
+        prefetchQueue.push(...items);
+        console.log(`[Feed] Prefetched ${items.length} posts. Queue size: ${prefetchQueue.length}`);
+      }
+      isPrefetching = false;
     }
 
+    // --- Interactive Like Handler ---
     document.getElementById('postsList').addEventListener('click', (e) => {
       const likeBtn = e.target.closest('.like-btn');
-      if (likeBtn) {
-        const postId = likeBtn.dataset.id;
-        const post = posts.find(p => p.id === postId);
-        if (post) {
-          post.isLiked = !post.isLiked;
-          post.likes += post.isLiked ? 1 : -1;
-          console.log(`[Feed] Post "${postId}" ${post.isLiked ? 'liked' : 'unliked'}. Total likes: ${post.likes}`);
-          renderPosts();
-        }
-      }
+      if (!likeBtn) return;
+
+      const postId = likeBtn.dataset.id;
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      post.isLiked = !post.isLiked;
+      post.likes += post.isLiked ? 1 : -1;
+
+      // In-place atomic update
+      likeBtn.classList.toggle('liked', post.isLiked);
+      likeBtn.setAttribute('aria-pressed', post.isLiked);
+      likeBtn.querySelector('span:first-child').textContent = post.isLiked ? '❤️' : '🤍';
+      likeBtn.querySelector('.like-count').textContent = post.likes;
+
+      console.log(`[Feed] Post "${postId}" ${post.isLiked ? 'liked' : 'unliked'}. Likes: ${post.likes}`);
+      recordInteraction(post, 'like');
+      persistPosts();
     });
 
-    document.getElementById('loadMoreBtn').addEventListener('click', async () => {
-      console.log('[Feed] "Load More" clicked');
-      const btn = document.getElementById('loadMoreBtn');
-      btn.disabled = true;
-      btn.textContent = 'Generating...';
+    // --- Infinite Scroll Loader ---
+    async function loadMorePosts() {
+      if (isLoading) return;
+      isLoading = true;
 
-      const newPosts = await generateAIPosts(2);
-      if (newPosts && newPosts.length) {
-        console.log('[Feed] Appending AI-generated posts:', newPosts);
-        posts.push(...newPosts);
+      let batch = [];
+      if (prefetchQueue.length > 0) {
+        batch = prefetchQueue.splice(0, 6);
+        console.log(`[Feed] Instant append from prefetch queue (${batch.length} posts). Remaining: ${prefetchQueue.length}`);
       } else {
-        console.log('[Feed] Appending fallback posts');
-        posts.push(
-          {
-            id: `p_${Date.now()}_1`,
-            author: { name: "Jane Smith", handle: "@jane_s", avatarText: "J" },
-            text: "Just released my new project! Check it out.",
-            likes: 23,
-            isLiked: false
-          },
-          {
-            id: `p_${Date.now()}_2`,
-            author: { name: "Bob Johnson", handle: "@bob_j", avatarText: "B" },
-            text: "Great article on system design. Added it to my bookmarks.",
-            likes: 18,
-            isLiked: false
-          }
-        );
+        const sentinelText = document.getElementById('sentinelText');
+        sentinelText.classList.remove('hidden');
+        console.log('[Feed] Prefetch queue empty, generating on demand...');
+
+        const newPosts = await generateAIPosts(6);
+        batch = (newPosts && newPosts.length) ? newPosts : generateFallbackBatch(6);
+        sentinelText.classList.add('hidden');
       }
 
-      btn.disabled = false;
-      btn.textContent = 'Load More';
-      renderPosts();
-    });
+      posts.push(...batch);
+      persistPosts();
 
-    async function init() {
-      console.log('[Feed] Initializing news feed...');
-      const postsList = document.getElementById('postsList');
-      postsList.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:1rem;">Loading posts...</div>';
-      const aiPosts = await generateAIPosts(2);
-      posts = aiPosts && aiPosts.length ? aiPosts : fallbackPosts;
-      console.log('[Feed] Rendering feed with posts:', posts);
-      renderPosts();
+      // Render virtual window around current scroll position
+      const scrollY = window.scrollY;
+      const estimatedTop = Math.floor(scrollY / CARD_HEIGHT_ESTIMATE);
+      const newStart = Math.max(0, estimatedTop - WINDOW_BUFFER);
+      renderVirtualWindow(newStart, Math.min(posts.length, newStart + MAX_VISIBLE_WINDOW));
+
+      isLoading = false;
+      prefetchNextBatch();
+    }
+
+    // --- Instant Boot ---
+    function init() {
+      console.log('[Feed] Instant init...');
+      const cached = loadCachedPosts();
+
+      if (cached) {
+        console.log('[Feed] Restored instantly from cache:', cached.length, 'posts');
+        posts = cached;
+      } else {
+        console.log('[Feed] First visit: rendering 10 immediate starter posts');
+        posts = [...initialStarterPosts];
+        persistPosts();
+      }
+
+      renderVirtualWindow(0, Math.min(posts.length, MAX_VISIBLE_WINDOW));
+      updatePersonaUI();
+
+      bottomObserver.observe(document.getElementById('scrollSentinel'));
+      warmupAI();
     }
 
     init();

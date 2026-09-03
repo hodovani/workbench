@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Feed: Level 1</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .feed-container {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .post-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #0f172a;
+      flex-shrink: 0;
+    }
+
+    .post-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .post-header {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+    }
+
+    .author-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .author-handle {
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    .post-text {
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    .post-actions {
+      display: flex;
+      margin-top: 0.5rem;
+    }
+
+    .like-btn {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      border-radius: 6px;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .like-btn.liked {
+      color: #f43f5e;
+      border-color: #f43f5e;
+      background: rgba(244, 63, 94, 0.1);
+    }
+
+    .load-more-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.5rem;
+    }
+
+    #postsList {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="feed-container" id="feed">
+    <div id="postsList"></div>
+    <button class="load-more-btn" id="loadMoreBtn">Load More</button>
+  </main>
+
+  <script>
+    const fallbackPosts = [
+      {
+        id: "p1",
+        author: { name: "Matvii Hodovaniuk", handle: "@hodovani", avatarText: "M" },
+        text: "Building a news feed from scratch. Starting with vanilla JavaScript before touching any framework.",
+        likes: 12,
+        isLiked: false
+      },
+      {
+        id: "p2",
+        author: { name: "Sarah Chen", handle: "@sarah_c", avatarText: "S" },
+        text: "The best system design insight: build the simplest version first. Learn what breaks before abstracting.",
+        likes: 45,
+        isLiked: false
+      }
+    ];
+
+    let posts = [];
+
+    async function generateAIPosts(count = 2) {
+      console.log(`[Prompt API] Checking availability for ${count} posts...`);
+      const LM = window.LanguageModel || globalThis.LanguageModel || window.ai?.languageModel;
+      if (!LM) {
+        console.warn('[Prompt API] LanguageModel is not available in this browser. Falling back to static data.');
+        return null;
+      }
+
+      try {
+        const availability = await (LM.availability
+          ? LM.availability({
+              expectedInputs: [{ type: 'text', languages: ['en'] }],
+              expectedOutputs: [{ type: 'text', languages: ['en'] }]
+            })
+          : LM.capabilities?.());
+
+        console.log('[Prompt API] Availability status:', availability);
+
+        const status = typeof availability === 'string' ? availability : availability?.available;
+        if (status === 'unavailable' || status === 'no') {
+          console.warn('[Prompt API] LanguageModel is unavailable on this device.');
+          return null;
+        }
+
+        console.log('[Prompt API] Creating session...');
+        const session = await LM.create({
+          expectedInputs: [{ type: 'text', languages: ['en'] }],
+          expectedOutputs: [{ type: 'text', languages: ['en'] }],
+          initialPrompts: [
+            {
+              role: 'system',
+              content: 'You are generating short, authentic social media updates from software developers. Always respond with pure JSON.'
+            }
+          ],
+          monitor(m) {
+            m.addEventListener('downloadprogress', (e) => {
+              console.log(`[Prompt API] Model download progress: ${Math.round(e.loaded * 100)}%`);
+            });
+          }
+        });
+
+        const prompt = `Generate ${count} short tech micro-posts. Return ONLY a valid JSON array of objects with keys: "name", "handle", "text". Example: [{"name":"Alex","handle":"@alex","text":"Testing Prompt API."}]`;
+        console.log('[Prompt API] Prompting model with:', prompt);
+
+        const response = await session.prompt(prompt);
+        console.log('[Prompt API] Raw model response:', response);
+
+        if (typeof session.destroy === 'function') {
+          session.destroy();
+        }
+
+        const cleaned = response.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+        const data = JSON.parse(cleaned);
+        console.log('[Prompt API] Parsed posts:', data);
+
+        return data.map((item, index) => ({
+          id: `p_${Date.now()}_${index}`,
+          author: {
+            name: item.name,
+            handle: item.handle?.startsWith('@') ? item.handle : `@${item.handle || 'user'}`,
+            avatarText: (item.name || 'U')[0].toUpperCase()
+          },
+          text: item.text,
+          likes: Math.floor(Math.random() * 50) + 1,
+          isLiked: false
+        }));
+      } catch (err) {
+        console.warn('[Prompt API] Generation failed, falling back to static data:', err);
+        return null;
+      }
+    }
+
+    function renderPosts() {
+      const postsList = document.getElementById('postsList');
+      postsList.innerHTML = '';
+      posts.forEach(post => {
+        const postCard = document.createElement('div');
+        postCard.className = 'post-card';
+        postCard.innerHTML = `
+          <div class="avatar">${post.author.avatarText}</div>
+          <div class="post-content">
+            <div class="post-header">
+              <span class="author-name">${post.author.name}</span>
+              <span class="author-handle">${post.author.handle}</span>
+            </div>
+            <div class="post-text">${post.text}</div>
+            <div class="post-actions">
+              <button class="like-btn" data-id="${post.id}">
+                <span>${post.isLiked ? '❤️' : '🤍'}</span>
+                <span>${post.likes}</span>
+              </button>
+            </div>
+          </div>
+        `;
+        postsList.appendChild(postCard);
+      });
+    }
+
+    document.getElementById('postsList').addEventListener('click', (e) => {
+      const likeBtn = e.target.closest('.like-btn');
+      if (likeBtn) {
+        const postId = likeBtn.dataset.id;
+        const post = posts.find(p => p.id === postId);
+        if (post) {
+          post.isLiked = !post.isLiked;
+          post.likes += post.isLiked ? 1 : -1;
+          console.log(`[Feed] Post "${postId}" ${post.isLiked ? 'liked' : 'unliked'}. Total likes: ${post.likes}`);
+          renderPosts();
+        }
+      }
+    });
+
+    document.getElementById('loadMoreBtn').addEventListener('click', async () => {
+      console.log('[Feed] "Load More" clicked');
+      const btn = document.getElementById('loadMoreBtn');
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+
+      const newPosts = await generateAIPosts(2);
+      if (newPosts && newPosts.length) {
+        console.log('[Feed] Appending AI-generated posts:', newPosts);
+        posts.push(...newPosts);
+      } else {
+        console.log('[Feed] Appending fallback posts');
+        posts.push(
+          {
+            id: `p_${Date.now()}_1`,
+            author: { name: "Jane Smith", handle: "@jane_s", avatarText: "J" },
+            text: "Just released my new project! Check it out.",
+            likes: 23,
+            isLiked: false
+          },
+          {
+            id: `p_${Date.now()}_2`,
+            author: { name: "Bob Johnson", handle: "@bob_j", avatarText: "B" },
+            text: "Great article on system design. Added it to my bookmarks.",
+            likes: 18,
+            isLiked: false
+          }
+        );
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Load More';
+      renderPosts();
+    });
+
+    async function init() {
+      console.log('[Feed] Initializing news feed...');
+      const postsList = document.getElementById('postsList');
+      postsList.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:1rem;">Loading posts...</div>';
+      const aiPosts = await generateAIPosts(2);
+      posts = aiPosts && aiPosts.length ? aiPosts : fallbackPosts;
+      console.log('[Feed] Rendering feed with posts:', posts);
+      renderPosts();
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

@@ -1,29 +1,29 @@
 {
   "name": "workbench",
-  "version": "1.0.0",
-  "description": "repo of js, ts, components",
-  "keywords": [
-    "javascript",
-    "typescript"
-  ],
-  "homepage": "https://github.com/hodovani/workbench#readme",
-  "bugs": {
-    "url": "https://github.com/hodovani/workbench/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/hodovani/workbench.git"
-  },
-  "license": "ISC",
-  "author": "Matvii Hodovaniuk",
-  "type": "commonjs",
-  "main": "index.js",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "next dev --experimental-https",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check",
+    "format": "biome format --write",
     "curriculum:build": "node meta/scripts/generate-curriculum.js",
-    "track": "node meta/scripts/track-progress.js"
+    "track": "node meta/scripts/track-progress.js",
+    "prepare": "git config core.hooksPath .githooks || true"
+  },
+  "dependencies": {
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "typescript": "^7.0.2"
-  }
+    "@biomejs/biome": "2.4.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.18.1"
 }

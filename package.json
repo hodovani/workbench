@@ -9,10 +9,12 @@
     "lint": "biome check",
     "format": "biome format --write",
     "curriculum:build": "node meta/scripts/generate-curriculum.js",
+    "curriculum:query": "node meta/scripts/curriculum-query.js",
     "track": "node meta/scripts/track-progress.js",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
+    "@google/genai": "^2.24.0",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8"

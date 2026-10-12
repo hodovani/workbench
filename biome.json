@@ -32,7 +32,8 @@
       "performance": { "recommended": true },
       "security": { "recommended": true },
       "style": { "recommended": true },
-      "suspicious": { "recommended": true }
+      "suspicious": { "recommended": true },
+      "nursery": { "noInlineStyles": "error" }
     },
     "domains": {
       "next": "all",

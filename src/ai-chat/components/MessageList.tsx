@@ -71,7 +71,7 @@ export function MessageList() {
 
             {isLoading ? (
               <p aria-live="polite">
-                <em>...</em>
+                <progress aria-label="Waiting for Gemini" />
               </p>
             ) : (
               <pre aria-live={isStreaming ? "polite" : "off"}>

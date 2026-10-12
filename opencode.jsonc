@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "plan",
+  "formatter": true,
+  "permissions": [{ "action": "read", "resource": "*.env", "effect": "deny" }],
+  "agents": {
+    "explore": { "model": "opencode/ling-3.1-flash-free" },
+    "general": { "model": "opencode/mimo-v2.6-flash-free" },
+    "architecture": { "model": "opencode/space-bunny-free#high" },
+    "build": { "model": "opencode/space-bunny-free#high" },
+    "plan": { "model": "opencode/space-bunny-free#high" }
+  }
+}

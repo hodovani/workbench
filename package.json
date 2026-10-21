@@ -42,7 +42,7 @@
     "jsdom": "^26.1.0",
     "knip": "^5.88.1",
     "typescript": "^5",
-    "vitest": "^3.2.7",
+    "vitest": "^4.1.11",
     "wrangler": "^4.151.3"
   },
   "packageManager": "pnpm@10.18.1"

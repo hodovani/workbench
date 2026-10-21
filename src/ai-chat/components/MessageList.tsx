@@ -2,11 +2,11 @@
 
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { chatMediator } from "../ChatMediator";
-import { useThread } from "../hooks/useThread";
-import type { Message } from "../types";
+import { useChatSnapshot } from "../hooks/useChatSnapshot";
 
 export function MessageList() {
-  const messages = useThread();
+  const snapshot = useChatSnapshot();
+  const messages = snapshot.messages;
   const bottomRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const messageRefs = useRef<(HTMLElement | null)[]>([]);
@@ -45,11 +45,12 @@ export function MessageList() {
 
   return (
     <section role="feed" aria-label="Conversation Thread">
-      {messages.map((message: Message, index: number) => {
+      {messages.map((message, index) => {
         const isUser = message.role === "user";
         const isLoading = message.status === "loading";
         const isError = message.status === "error";
         const isStreaming = message.status === "streaming";
+        const canRetry = snapshot.canRetry && index === messages.length - 1;
 
         return (
           <article
@@ -79,15 +80,23 @@ export function MessageList() {
               </pre>
             )}
 
-            {isError && (
+            {(isError || message.status === "interrupted") && (
               <p role="alert">
-                <mark>Error generating response.</mark>{" "}
-                <button
-                  type="button"
-                  onClick={() => chatMediator.retryLastMessage()}
-                >
-                  Retry
-                </button>
+                <mark>
+                  {message.content === "quota_unavailable"
+                    ? "The shared free-tier quota is temporarily unavailable. Please try again later."
+                    : message.status === "interrupted"
+                      ? "Response interrupted."
+                      : "Error generating response."}
+                </mark>{" "}
+                {canRetry && (
+                  <button
+                    type="button"
+                    onClick={() => void chatMediator.retryLastMessage()}
+                  >
+                    Retry
+                  </button>
+                )}
               </p>
             )}
 

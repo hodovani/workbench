@@ -8,27 +8,36 @@ import {
   useState,
 } from "react";
 import { chatMediator } from "../ChatMediator";
-import { useAppState } from "../hooks/useAppState";
+import { useChatSnapshot } from "../hooks/useChatSnapshot";
 
 export function MessageInput() {
   const [text, setText] = useState("");
-  const { isBusy } = useAppState();
+  const { phase, canSend } = useChatSnapshot();
+  const isBusy = phase !== "idle";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaId = useId();
 
-  const isBlocked = !text.trim() || isBusy;
+  const isBlocked = !text.trim() || !canSend;
+  const activity =
+    phase === "streaming"
+      ? "Thinking..."
+      : phase === "saving"
+        ? "Saving..."
+        : phase === "loading"
+          ? "Loading..."
+          : phase === "importing"
+            ? "Importing..."
+            : "Send";
 
   const handleSubmit = (e?: FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || isBusy) return;
 
-    chatMediator.sendMessage(trimmed);
-    setText("");
-
-    setTimeout(() => {
+    void chatMediator.sendMessage(trimmed).then((accepted) => {
+      if (accepted) setText("");
       textareaRef.current?.focus();
-    }, 0);
+    });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -55,15 +64,15 @@ export function MessageInput() {
           onKeyDown={handleKeyDown}
           placeholder={
             isBusy
-              ? "AI is responding..."
+              ? activity
               : "Type your prompt... (Enter to send, Shift+Enter for new line)"
           }
-          disabled={isBusy}
+          disabled={!canSend}
         />
       </p>
       <p>
-        <button type="submit" disabled={isBlocked} aria-disabled={isBlocked}>
-          {isBusy ? "Thinking..." : "Send"}
+        <button type="submit" disabled={isBlocked}>
+          {activity}
         </button>
       </p>
     </form>

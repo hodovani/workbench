@@ -1,58 +1,36 @@
 # Workbench
 
-A React and TypeScript engineering workbench for building and explaining product features. The current application is a **streaming AI chat prototype**, built with Next.js and the Google Gen AI SDK.
-
-**Status: work in progress.** The implementation is available to inspect and run; the live prototype requires your own Gemini API key.
+A portfolio of small, working examples for deliberate TypeScript, systems, and product practice.
 
 [Open the prototype](https://hodovani.github.io/workbench/) · [More projects & case studies](https://hodovani.github.io/projects/) · [LinkedIn / contact](https://www.linkedin.com/in/matvii-hodovaniuk/)
 
-## Current features
+The first interactive project is a guest-first AI chat. Visitors can try it
+without creating an account; Google sign-in saves separate conversations to
+Firestore. The static frontend calls a small Cloudflare Worker so a Gemini key
+does not ship to browsers. The chat UI uses semantic HTML and browser defaults;
+there is no authored CSS.
 
-- Streamed assistant responses with loading, streaming, completion, and error states.
-- Conversation history sent with follow-up messages during the current session.
-- Retry of the last request after an error.
-- API-key entry and a Change API Key control.
-- Separate React UI, conversation state, storage, and model integration modules.
-
-## Architecture
-
-The chat implementation is in [src/ai-chat](./src/ai-chat):
-
-| Module | Responsibility |
-| --- | --- |
-| [ChatMediator](./src/ai-chat/ChatMediator.ts) | Coordinates application state, sending, streaming, and retry. Uses constructor-injected dependencies. |
-| [ObservableThreadStore](./src/ai-chat/ThreadStore.ts) | Holds conversation state and notifies subscribers using the Observer pattern. |
-| [GeminiStreamStrategy](./src/ai-chat/GeminiStreamStrategy.ts) | Implements the model-streaming contract using the Strategy pattern. |
-| [BrowserStorageAdapter](./src/ai-chat/BrowserStorageAdapter.ts) | Wraps browser storage behind a small adapter interface. |
-| [React components](./src/ai-chat/components) | API-key entry, message input, and message rendering. |
-
-The [Next.js page](./src/app/page.tsx) connects these modules to the interface. The app is statically exported to GitHub Pages; it does not require a hosted application server for the current chat flow.
+The [`meta/`](./meta) folder is a learning inventory and service blueprint
+collection. It may include overlapping topics and is intentionally kept
+separate from the implemented product scope.
 
 ## Run locally
 
-The deployment workflow uses Node.js 20. The project pins pnpm 10.18.1 in package.json.
-
-~~~bash
-git clone https://github.com/hodovani/workbench.git
-cd workbench
+```bash
 pnpm install --frozen-lockfile
 pnpm dev
-~~~
+```
 
-Open the local address printed by the development server. Enter a Gemini API key to use live chat; no key is needed to read the implementation.
+`pnpm dev` starts both the frontend and local Worker. See [the Worker setup](./worker/README.md)
+for a local-only Gemini key. Run the checks in [TESTING.md](./TESTING.md).
 
-~~~bash
-pnpm lint    # Biome checks
-pnpm build   # Next.js static export to out/
-~~~
+For GitHub Pages, configure repository variables `NEXT_PUBLIC_FIREBASE_API_KEY`,
+`NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`,
+`NEXT_PUBLIC_FIREBASE_APP_ID`, and `NEXT_PUBLIC_CHAT_API_URL`. Configure the
+Worker's `GEMINI_API_KEY` secret and `ALLOWED_ORIGIN` separately in Cloudflare.
+The deploy workflow builds the static app from those public Firebase and Worker
+URLs; it never receives the Gemini secret.
 
-The [GitHub Actions workflow](./.github/workflows/deploy.yml) runs lint and build before deploying to Pages. The production workflow sets the /workbench base path.
-
-## Prototype boundaries
-
-- Gemini requests are made directly from the browser. Prompts and conversation context are sent to Google's Gemini service.
-- The supplied API key is stored in localStorage, so it persists across browser sessions until removed with Change API Key or by clearing the site's storage. This is a prototype choice, not server-side secret management.
-- Messages are currently held in memory and reset on reload. Authentication and durable conversation history are not implemented.
-- The interface is still being developed; this repository does not yet represent a finished production chat product.
-
-This is an independent project. It does not contain an implementation or data from a previous employer.
+See [the architecture notes](./src/ARCHITECTURE_REVIEW.md) for why each pattern
+is used. This is an independent project. It does not contain an implementation
+or data from a previous employer.

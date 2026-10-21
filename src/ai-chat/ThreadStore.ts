@@ -2,28 +2,10 @@ import type { Listener, Message } from "@/ai-chat/types";
 import { MessageStatus } from "./types";
 
 export class ObservableThreadStore {
-  private messages: Message[];
-  private listeners: Set<Listener>;
+  private messages: Message[] = [];
+  private listeners = new Set<Listener>();
 
-  constructor({ messages = [], listeners = new Set<Listener>() } = {}) {
-    this.messages = messages;
-    this.listeners = listeners;
-  }
-
-  private getActive(): Message | undefined {
-    return this.messages[this.messages.length - 1];
-  }
-
-  private setActive(newMessage: Message) {
-    this.messages = [
-      ...this.messages.slice(0, this.messages.length - 1),
-      newMessage,
-    ];
-  }
-
-  public getSnapshot = (): Message[] => {
-    return this.messages;
-  };
+  public getSnapshot = (): Message[] => this.messages;
 
   public subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -37,57 +19,31 @@ export class ObservableThreadStore {
     this.notify();
   }
 
-  public appendChunkToActive(chunk: string): void {
-    const active = this.getActive();
-    if (active) {
-      this.setActive({
-        ...active,
-        content: active.content + chunk,
-        status: MessageStatus.Streaming,
-      });
-      this.notify();
-    }
+  public updateMessage(
+    id: string,
+    update: (message: Message) => Message,
+  ): boolean {
+    if (!this.messages.some((message) => message.id === id)) return false;
+    this.messages = this.messages.map((message) =>
+      message.id === id ? update(message) : message,
+    );
+    this.notify();
+    return true;
   }
 
-  public markActiveDone(): void {
-    const active = this.getActive();
-    if (active) {
-      this.setActive({
-        ...active,
-        status: MessageStatus.Done,
-      });
-      this.notify();
-    }
+  public hydrate(messages: Message[]): void {
+    this.messages = messages.map((message) =>
+      message.status === MessageStatus.Loading ||
+      message.status === MessageStatus.Streaming
+        ? { ...message, status: MessageStatus.Interrupted }
+        : message,
+    );
+    this.notify();
   }
 
-  public setError(error: string): void {
-    const active = this.getActive();
-    if (active) {
-      this.setActive({
-        ...active,
-        status: MessageStatus.Error,
-        content: error,
-      });
-      this.notify();
-    }
-  }
-
-  public resetActive(): void {
-    const active = this.getActive();
-    if (active) {
-      this.setActive({
-        ...active,
-        content: "",
-        status: MessageStatus.Loading,
-      });
-      this.notify();
-    }
-  }
-
-  // Internal Helper
   private notify(): void {
-    this.listeners.forEach((l) => {
-      l();
+    this.listeners.forEach((listener) => {
+      listener();
     });
   }
 }

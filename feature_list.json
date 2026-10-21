@@ -1,0 +1,41 @@
+{
+  "project": "workbench",
+  "version": "0.1.0",
+  "features": [
+    {
+      "id": "guest-chat",
+      "name": "Guest-first AI chat",
+      "description": "Visitors can stream a plain-text conversation without login or a client API key.",
+      "status": "implemented",
+      "category": "ai-chat"
+    },
+    {
+      "id": "private-generation-proxy",
+      "name": "Private Gemini generation endpoint",
+      "description": "A Worker holds the Gemini key, validates requests, and reports free-tier quota exhaustion without paid fallback.",
+      "status": "implemented",
+      "category": "backend"
+    },
+    {
+      "id": "optional-auth",
+      "name": "Optional Google sign-in",
+      "description": "Visitors can chat first, then sign in; auth failures leave the guest conversation available.",
+      "status": "implemented",
+      "category": "platform"
+    },
+    {
+      "id": "saved-conversations",
+      "name": "Separate saved conversations",
+      "description": "Firestore stores account-owned chats; guest import is idempotent and does not replace existing history.",
+      "status": "implemented",
+      "category": "storage"
+    },
+    {
+      "id": "usage-dashboard",
+      "name": "Admin usage and performance view",
+      "description": "Review service use and performance after real traffic justifies monitoring work.",
+      "status": "planned",
+      "category": "operations"
+    }
+  ]
+}

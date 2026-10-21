@@ -25,6 +25,9 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.development
+worker/.dev.vars
+worker/.wrangler/
 
 # vercel
 .vercel

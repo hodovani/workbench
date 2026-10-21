@@ -3,10 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --experimental-https",
+    "dev": "node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
+    "test": "vitest run",
+    "test:worker": "vitest run --configLoader native --config worker/vitest.config.mts",
+    "test:integration": "firebase emulators:exec --only firestore --project demo-workbench 'pnpm exec vitest run --configLoader native --config vitest.integration.config.mts'",
+    "test:types": "vitest run --typecheck.only",
+    "coverage": "vitest run --coverage",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml --var ALLOWED_ORIGIN:http://localhost:3000,https://localhost:3000,http://localhost:3001,https://localhost:3001",
+    "worker:check": "wrangler deploy --dry-run --config worker/wrangler.toml",
+    "typecheck": "tsc --noEmit",
+    "knip": "knip",
     "format": "biome format --write",
     "curriculum:build": "node meta/scripts/generate-curriculum.js",
     "curriculum:query": "node meta/scripts/curriculum-query.js",
@@ -14,7 +23,6 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
     "firebase": "^12.19.0",
     "next": "16.3.6",
     "react": "19.2.8",
@@ -22,11 +30,20 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.9",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.7",
     "babel-plugin-react-compiler": "1.0.0",
-    "typescript": "^5"
+    "firebase-tools": "^15.34.0",
+    "jsdom": "^26.1.0",
+    "knip": "^5.88.1",
+    "typescript": "^5",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.151.3"
   },
   "packageManager": "pnpm@10.18.1"
 }

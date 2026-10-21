@@ -33,7 +33,11 @@
       "security": { "recommended": true },
       "style": { "recommended": true },
       "suspicious": { "recommended": true },
-      "nursery": { "noInlineStyles": "error" }
+      "nursery": {
+        "noInlineStyles": "error",
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error"
+      }
     },
     "domains": {
       "next": "all",

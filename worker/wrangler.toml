@@ -1,0 +1,6 @@
+name = "workbench-chat-proxy"
+main = "index.ts"
+compatibility_date = "2026-10-21"
+
+[vars]
+ALLOWED_ORIGIN = "https://hodovani.github.io"

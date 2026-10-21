@@ -31,6 +31,12 @@ jobs:
           node-version: 20
           cache: "pnpm"
 
+      - name: Setup Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -40,7 +46,34 @@ jobs:
       - name: Lint and check
         run: pnpm lint
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Check for unused exports and files
+        run: pnpm knip
+
+      - name: Test with coverage thresholds
+        run: pnpm coverage
+
+      - name: Compile-time contract tests
+        run: pnpm test:types
+
+      - name: Worker protocol tests
+        run: pnpm test:worker
+
+      - name: Firestore rules and repository integration tests
+        run: pnpm test:integration
+
+      - name: Check Worker bundle
+        run: pnpm worker:check
+
       - name: Build static site
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_CHAT_API_URL: ${{ vars.NEXT_PUBLIC_CHAT_API_URL }}
         run: pnpm build
 
       - name: Upload artifact

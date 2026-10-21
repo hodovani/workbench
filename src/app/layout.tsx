@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
-import "./globals.css";
-
-export const metadata: Metadata = {
-  title: "AI Chat",
-  description: "Minimalist AI Chat",
-};
+import { AuthProvider } from "@/auth";
+import { WorkbenchNavbar } from "@/components/WorkbenchNavbar";
 
 export default function RootLayout({
   children,
@@ -13,7 +8,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <head>
+        <title>Workbench Chat</title>
+        <meta
+          name="description"
+          content="A guest-first AI chat portfolio project."
+        />
+      </head>
+      <body>
+        <AuthProvider>
+          <WorkbenchNavbar />
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   );
 }

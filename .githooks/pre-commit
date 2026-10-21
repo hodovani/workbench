@@ -5,5 +5,17 @@ set -e
 pnpm biome check --write --staged --no-errors-on-unmatched
 git update-index --again
 
-# 2. Verify production build succeeds
+# 2. Typecheck. Not redundant with build: next build skips *.test.* files.
+pnpm typecheck
+
+# 3. Fail on unused exports and unreachable files.
+pnpm knip
+
+# 4. Run the suite; fails below the coverage thresholds.
+pnpm coverage
+
+# 5. Compile-time contract tests
+pnpm test:types
+
+# 6. Verify production build succeeds
 pnpm build

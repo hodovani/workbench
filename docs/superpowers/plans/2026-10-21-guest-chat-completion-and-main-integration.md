@@ -10,6 +10,31 @@
 
 **Spec:** [Guest-first design](../specs/2026-10-21-guest-chat-design.md). This plan covers the remaining completion and integration work; the earlier [layered TDD plan](2026-10-21-guest-chat-tdd.md) remains the detailed scenario catalogue.
 
+## Execution record — 2026-10-21
+
+- The implementation is integrated in `main`: feature commit `813f081`, merge
+  commit `54c9674`, and local endpoint config commit `55e26c9`.
+- The main checkout's original staged/unstaged/untracked state was saved as
+  `stash@{0}` (`codex pre-integration main snapshot 2026-10-21`). Its unrelated
+  `opencode.jsonc` change remains unstaged. Overlapping implementation and
+  docs were superseded by the verified feature; the old BYOK adapter tests and
+  stylesheet remain recoverable in the stash, not active in the merged tree.
+- Final local gates: lint, typecheck, 88 fast tests, 9 type-contract tests,
+  7 Worker tests, Knip, coverage thresholds, Worker dry-run, and static build
+  passed. Coverage: 93.61% statements/lines, 83.97% branches, 94.66% functions.
+- The local Worker CORS preflight returned 204 and one guest prompt streamed
+  successfully. Production-origin dry-run shows only
+  `https://hodovani.github.io`; a synthetic key sentinel and `GEMINI_API_KEY`
+  were absent from static assets. No authored CSS or `meta/` changes were made.
+- Firestore emulator execution is pending because Java is unavailable; the
+  fresh integration command stopped before running tests. Sign-in/history
+  was not manually tested against a real account. Browser E01–E06 remain
+  deferred; the unload behavior is unit-tested, not manually triggered.
+- A fresh dependency reinstall could not complete because the package registry
+  was unreachable. Main's ignored `node_modules` was rebuilt from the already
+  installed, lockfile-matched worktree dependencies so its final checks could
+  run. Keep the worktree until main has its own successful networked install.
+
 ## Current evidence and open work
 
 - The feature worktree and `/Users/matviihodovaniuk/Documents/workbench` are both at `6dd19db`; the feature worktree has extensive uncommitted implementation, while `main` has its own staged, unstaged, and untracked work.
@@ -142,13 +167,13 @@
 - Consumes: verified feature worktree; main's staged/unstaged/untracked snapshot; `origin/main` commit `c614f4a`.
 - Produces: the verified guest-chat work and the pre-existing main changes both present, with original staging distinctions restored where Git permits.
 
-- [ ] **Step 1: Review the full main snapshot and classify each change as keep, superseded, or conflict.** Include staged changes, unstaged changes, and untracked files. Do not treat a file's staged version as equivalent to its working-tree version.
-- [ ] **Step 2: Commit the reviewed feature work on `codex/guest-chat-tdd` only after the verification gate passes.** Use a focused commit; do not stage ignored credentials, `meta/`, or unrelated files.
-- [ ] **Step 3: Preserve main's local state in a named Git stash including untracked files and index state.** Verify the stash summary contains expected user files and no secrets before changing `main`; retain the stash as a recovery point.
-- [ ] **Step 4: Fast-forward `main` to the already-known `origin/main` README commit, then merge the reviewed feature branch.** Resolve the README using the remote documentation and guest-chat setup as separate inputs.
-- [ ] **Step 5: Reapply the named main snapshot with index restoration.** Resolve conflicts by retaining valid user changes and the tested guest-chat behavior; do not drop the stash until status and content checks prove every original change is present.
-- [ ] **Step 6: Run the full verification gate from `main` and compare its final status with the recorded pre-integration snapshot.** Confirm `meta/`, ignored local credentials, and the user's unrelated files remain untouched.
-- [ ] **Step 7: Present the final diff and preserved staging status for review.** Do not deploy or push as part of local integration.
+- [x] **Step 1: Review the full main snapshot and classify each change as keep, superseded, or conflict.** Include staged changes, unstaged changes, and untracked files. Do not treat a file's staged version as equivalent to its working-tree version.
+- [x] **Step 2: Commit the reviewed feature work on `codex/guest-chat-tdd` only after the verification gate passes.** Use a focused commit; do not stage ignored credentials, `meta/`, or unrelated files.
+- [x] **Step 3: Preserve main's local state in a named Git stash including untracked files and index state.** Verify the stash summary contains expected user files and no secrets before changing `main`; retain it as a recovery point.
+- [x] **Step 4: Fast-forward `main` to the already-known `origin/main` README commit, then merge the reviewed feature branch.** Resolve the README using the remote documentation and guest-chat setup as separate inputs.
+- [x] **Step 5: Reconcile the named main snapshot, restoring original staging distinctions where possible.** Resolve conflicts by retaining valid user changes and the tested guest-chat behavior; keep the stash as a recovery point.
+- [x] **Step 6: Run the full verification gate from `main` and compare its final status with the recorded pre-integration snapshot.** Confirm `meta/`, ignored local credentials, and the user's unrelated files remain untouched.
+- [x] **Step 7: Present the final diff and preserved staging status for review.** Do not deploy or push as part of local integration.
 
 ## Completion criteria
 

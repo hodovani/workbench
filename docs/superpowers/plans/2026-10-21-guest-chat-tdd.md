@@ -1,5 +1,14 @@
 # Guest-first portfolio chat: layered TDD implementation plan
 
+> Execution note (2026-10-21): this is the detailed scenario catalogue used
+> during implementation, not a live task tracker. The merged result passes 88
+> fast tests, 7 Worker tests, and 9 type-contract tests. Firestore emulator tests
+> are present but a fresh run is pending because this environment has no Java
+> runtime. See [agent-progress.md](../../../agent-progress.md) and the
+> [completion/integration plan](2026-10-21-guest-chat-completion-and-main-integration.md)
+> for current evidence and remaining limits. E01–E06 browser journeys remain
+> deferred.
+
 **Goal:** Immediate guest chat, optional Google sign-in, and durable separate conversations without a visitor API key.
 
 **Architecture:** Static Next.js frontend; a minimal Worker owns the Gemini key. Existing auth/storage adapters and chat mediator remain, with session-safe asynchronous operations and React subscriptions.

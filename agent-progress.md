@@ -1,7 +1,9 @@
 # Guest-first chat progress
 
-Implementation and behavior tests live in the isolated branch/worktree. The
-original checkout and its staged state were left unchanged.
+The guest-first implementation and behavior tests are integrated into `main`.
+The pre-integration checkout state remains available in the named stash
+`codex pre-integration main snapshot 2026-10-21`; the user's unrelated
+`opencode.jsonc` edit remains unstaged.
 
 ## Completed slices
 
@@ -38,6 +40,12 @@ Worker. The manual pass did not exercise sign-in or saved-history import, and
 the native browser unload dialog was covered by unit tests rather than manually
 triggered. Production deployment, quotas, and real account history remain
 outside this local check.
+
+The feature is merged into `main` and the local endpoint config is committed in
+`.env.development` (`http://localhost:8787`). The merge preserved the remote
+README links and replaced its obsolete BYOK instructions. The stash is retained
+for recovery; older main-only BYOK tests and CSS were superseded by the tested
+guest-first implementation and are not active in the merged tree.
 
 The Playwright browser acceptance layer remains deferred. These tests cover the
 mediator, UI controls, Firebase rules/repository, and Worker protocol at their

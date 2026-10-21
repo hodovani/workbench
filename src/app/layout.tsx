@@ -1,3 +1,4 @@
+import "./globals.css";
 import { AuthProvider } from "@/auth";
 import { WorkbenchNavbar } from "@/components/WorkbenchNavbar";
 

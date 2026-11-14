@@ -64,3 +64,8 @@ GitHub Actions: lint -> build -> deploy static export to GitHub Pages.
 - Contract interfaces in `types.ts`
 - `"use client"` on client components
 - HMR-safe singletons
+
+## 10. Tests
+
+- Cover meaningful edge cases from the stated constraints, including input-size and value boundaries where relevant.
+- Keep test inputs within the stated constraints.

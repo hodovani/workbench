@@ -2,7 +2,7 @@
 set -e
 
 # 1. Format and fix staged files with Biome, re-staging changes
-pnpm biome check --write --staged --no-errors-on-unmatched
+pnpm biome check --write --staged --no-errors-on-unmatched --error-on-warnings
 git update-index --again
 
 # 2. Typecheck. Not redundant with build: next build skips *.test.* files.

@@ -9,6 +9,8 @@ export default defineConfig({
     command: "pnpm exec next dev --hostname 127.0.0.1 --port 3100",
     url: baseURL,
     env: {
+      // The test server serves the chat at /, independent of the Pages base path.
+      GITHUB_ACTIONS: "false",
       NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_FIREBASE_API_KEY: "test-api-key",
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-workbench",

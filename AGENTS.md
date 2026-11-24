@@ -70,16 +70,54 @@ GitHub Actions: lint -> build -> deploy static export to GitHub Pages.
 - Cover meaningful edge cases from the stated constraints, including input-size and value boundaries where relevant.
 - Keep test inputs within the stated constraints.
 
-## 11. PR handoff
+## 11. Intent and planning gate
 
-For implementation tasks, finish by opening a draft GitHub PR against `main`
-unless I ask to keep the work local.
+Begin every repository change in Plan mode. Find or draft
+`docs/intents/YYYY-MM-DD-short-slug/intent.md` using
+[the intent template](docs/intents/_template.md). The directory name is the
+intent ID. Record the problem, desired outcome, scope and constraints, and how
+to verify success. Resolve any open questions that block implementation.
 
-1. Confirm the requested outcome is met and the required local checks pass.
-   If a required check is blocked or fails, report the blocker.
-2. Commit only changes for this task on a feature branch. Preserve unrelated
-   edits and staged changes. Run the repository's normal commit hooks.
-3. Push the branch and open a draft PR with `gh pr create --draft --base main`.
-   If the branch already has a PR, update it. Include what changed, how you
-   verified it, and a link to the intent file if one exists.
-4. Return the PR URL. Leave merging to me.
+**Hard stop:** Do not start implementation until the filled `intent.md` exists
+on disk and the plan is complete. If the intent is missing or incomplete, limit
+work to read-only discovery and capturing the intent and its baseline evidence.
+If the client cannot enter Plan mode, stay in read-only planning and report
+the limitation. Leave Plan mode before editing implementation files.
+
+For UI changes, capture the **before** screenshot or recording when initializing
+the intent, before editing the UI. Link it from the intent and record the route,
+viewport, and relevant UI state so the comparison can be reproduced.
+
+## 12. Automatic PR handoff
+
+Opening the PR is part of finishing implementation. Once the intent's acceptance
+criteria are met and required local checks pass, commit only this task's changes
+on a feature branch using the normal commit hooks. Push and open a draft PR
+against `main` with `gh pr create --draft --base main`. Start this automatically
+without a separate prompt. Preserve unrelated edits and staged changes. Update
+the existing PR if the branch already has one. Leave merging to the user.
+
+Include the intent link, what changed, and verification results in the PR
+description. Every UI PR must also include accessible **before** and **after**
+artifacts for the same route, viewport, and relevant state. Capture the after
+artifact from the implementation. For a new surface, show the previous user
+flow or entry point as the baseline.
+
+## 13. PR monitoring and follow-ups
+
+Immediately after opening or updating the PR, start monitoring its checks in
+the background, for example with `gh pr checks <PR_URL> --watch`. Keep the task
+active, read the result, and check the PR's review status before handing it off.
+Watch again after each fix. Return the PR URL and latest status when the checks
+pass and actionable findings are resolved, the PR closes, or a concrete blocker
+prevents progress. Report pending checks if monitoring is interrupted.
+
+- Inspect failed job logs and review findings. Fix verified regressions within
+  the intent on the same PR, run the relevant checks, and push the fix. Retry a
+  clearly transient failure once. Report access or infrastructure blockers.
+- For verified issues outside the intent, including separate copy or test
+  fixes, open or reuse a GitHub issue. Record the evidence, the intended fix,
+  and how to verify it. Link the issue and the originating PR to each other.
+  Keep the fix in its own PR with its own `intent.md`. Stack it on the current
+  branch only if it depends on that branch. If the issue blocks the current PR,
+  record the dependency and keep the current PR draft.

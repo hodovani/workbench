@@ -75,7 +75,10 @@ export function MessageList() {
                 <progress aria-label="Waiting for Gemini" />
               </p>
             ) : (
-              <pre aria-live={isStreaming ? "polite" : "off"}>
+              <pre
+                className="chat-message-content"
+                aria-live={isStreaming ? "polite" : "off"}
+              >
                 {message.content}
               </pre>
             )}

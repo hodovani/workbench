@@ -59,6 +59,11 @@ jobs:
       - name: Test with coverage thresholds
         run: pnpm coverage
 
+      - name: Chat browser regression tests
+        run: |
+          pnpm exec playwright install --with-deps --only-shell chromium
+          pnpm test:e2e
+
       - name: Compile-time contract tests
         run: pnpm test:types
 

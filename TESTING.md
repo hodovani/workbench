@@ -38,6 +38,15 @@ The GitHub Pages build is static. Set repository variables
 secret and the site origin in `ALLOWED_ORIGIN`; the Worker secret is never a
 `NEXT_PUBLIC_*` value. Production values are not present in this repository.
 
-There is no full browser E2E harness in v1. The chat state machine, UI controls,
-real Firestore rules/repository, and Worker wire protocol are tested at their
-respective boundaries. A deployed cross-layer smoke test remains a launch check.
+## Chat browser tests
+
+Install headless Chromium and run the chat wrapping regression:
+
+```sh
+pnpm exec playwright install --only-shell chromium
+pnpm test:e2e
+```
+
+On Linux, add `--with-deps` to the install command if system browser libraries
+are missing. The tests start a local Next.js server, mock the chat reply, and
+block external requests. They use synthetic data and need zero live API calls.

@@ -24,6 +24,7 @@ jobs:
       report: ${{ steps.ci-report.outputs.markdown }}
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Install pnpm
@@ -102,13 +103,18 @@ jobs:
         id: ci-report
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
+          CHECKOUT_STATUS: ${{ steps.checkout.outcome }}
           LINT_STATUS: ${{ steps.lint.outcome }}
           TYPECHECK_STATUS: ${{ steps.typecheck.outcome }}
           COVERAGE_STATUS: ${{ steps.coverage.outcome }}
           TYPE_TEST_STATUS: ${{ steps.type-tests.outcome }}
           CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          report=$(node scripts/ci-report.mjs coverage/coverage-summary.json)
+          if [[ "$CHECKOUT_STATUS" == success ]]; then
+            report=$(node scripts/ci-report.mjs coverage/coverage-summary.json)
+          else
+            report=$(printf '## CI report\n\nChecks were skipped because checkout did not succeed.\n\n[Workflow run](%s)' "$CI_RUN_URL")
+          fi
           printf '%s\n' "$report" >> "$GITHUB_STEP_SUMMARY"
           delimiter=$(uuidgen)
           printf 'markdown<<%s\n%s\n%s\n' "$delimiter" "$report" "$delimiter" >> "$GITHUB_OUTPUT"
@@ -119,7 +125,8 @@ jobs:
     if: >-
       ${{ !cancelled() && github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
-          github.actor != 'dependabot[bot]' && needs.build.outputs.report != '' }}
+          github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' &&
+          needs.build.outputs.report != '' }}
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest

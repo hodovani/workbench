@@ -13,7 +13,12 @@ function report(t, coverage) {
   const dir = mkdtempSync(join(tmpdir(), "workbench-ci-report-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "coverage-summary.json");
-  if (coverage) writeFileSync(path, JSON.stringify(coverage));
+  if (coverage !== undefined) {
+    writeFileSync(
+      path,
+      typeof coverage === "string" ? coverage : JSON.stringify(coverage),
+    );
+  }
 
   const result = spawnSync(process.execPath, [script, path], {
     encoding: "utf8",
@@ -49,6 +54,12 @@ test("reports independent check outcomes and coverage totals", (t) => {
 
 test("reports the check results if coverage was not produced", (t) => {
   const result = report(t);
+  assert.match(result, /\| Lint \| Failed \|/);
+  assert.match(result, /Coverage data was unavailable\./);
+});
+
+test("reports the check results if the coverage file is incomplete", (t) => {
+  const result = report(t, "{");
   assert.match(result, /\| Lint \| Failed \|/);
   assert.match(result, /Coverage data was unavailable\./);
 });

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 const [coveragePath] = process.argv.slice(2);
 const checks = [
@@ -18,9 +18,14 @@ for (const [name, outcome] of checks) {
   console.log(`| ${name} | ${labels.get(outcome) ?? "Skipped"} |`);
 }
 
-const coverage = existsSync(coveragePath)
-  ? JSON.parse(readFileSync(coveragePath, "utf8")).total
-  : undefined;
+let coverage;
+try {
+  coverage = JSON.parse(readFileSync(coveragePath, "utf8"))?.total;
+} catch (error) {
+  if (error.code !== "ENOENT") {
+    console.error("Could not read the coverage summary:", error.message);
+  }
+}
 const totals = ["lines", "branches", "functions", "statements"].map(
   (metric) => coverage?.[metric]?.pct,
 );

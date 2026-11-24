@@ -51,7 +51,7 @@ jobs:
 
       - name: Lint and check
         id: lint
-        run: pnpm lint && false
+        run: pnpm lint
 
       - name: Typecheck
         id: typecheck

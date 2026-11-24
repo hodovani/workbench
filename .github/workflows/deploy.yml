@@ -5,16 +5,14 @@ on:
     branches:
       - main
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -22,6 +20,8 @@ jobs:
       contents: read
       pages: read
     runs-on: ubuntu-latest
+    outputs:
+      report: ${{ steps.ci-report.outputs.markdown }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,18 +45,24 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Install dependencies
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Lint and check
+        id: lint
         run: pnpm lint
 
       - name: Typecheck
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm typecheck
 
       - name: Check for unused exports and files
         run: pnpm knip
 
       - name: Test with coverage thresholds
+        id: coverage
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm coverage
 
       - name: Chat browser regression tests
@@ -65,6 +71,8 @@ jobs:
           pnpm test:e2e
 
       - name: Compile-time contract tests
+        id: type-tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:types
 
       - name: Worker protocol tests
@@ -89,6 +97,49 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
+
+      - name: Summarize PR checks
+        id: ci-report
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          LINT_STATUS: ${{ steps.lint.outcome }}
+          TYPECHECK_STATUS: ${{ steps.typecheck.outcome }}
+          COVERAGE_STATUS: ${{ steps.coverage.outcome }}
+          TYPE_TEST_STATUS: ${{ steps.type-tests.outcome }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          report=$(node scripts/ci-report.mjs coverage/coverage-summary.json)
+          printf '%s\n' "$report" >> "$GITHUB_STEP_SUMMARY"
+          delimiter=$(uuidgen)
+          printf 'markdown<<%s\n%s\n%s\n' "$delimiter" "$report" "$delimiter" >> "$GITHUB_OUTPUT"
+
+  comment:
+    name: Publish PR report
+    needs: build
+    if: >-
+      ${{ !cancelled() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]' && needs.build.outputs.report != '' }}
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update CI report comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CI_REPORT: ${{ needs.build.outputs.report }}
+        run: |
+          comment_ids=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- workbench-ci-report -->"))) | .id')
+          comment_id=${comment_ids%%$'\n'*}
+          body=$(printf '<!-- workbench-ci-report -->\n%s\n' "$CI_REPORT")
+          if [[ -n "$comment_id" ]]; then
+            gh api --silent --method PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body"
+          else
+            gh api --silent --method POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -f body="$body"
+          fi
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

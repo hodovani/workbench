@@ -33,7 +33,7 @@ export default defineConfig({
         "src/storage/FirestoreChatRepository.ts",
         "src/app/**",
       ],
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "json-summary"],
       thresholds: {
         // Keep high line coverage while leaving room for defensive branch combinations.
         statements: 90,

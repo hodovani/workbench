@@ -3,3 +3,8 @@ html {
   margin: auto;
   padding: 1em;
 }
+
+.chat-message-content {
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+}

@@ -1,6 +1,6 @@
 # Show CI results on Workbench pull requests
 
-Status: accepted
+Status: implemented
 
 ## Problem
 
@@ -26,4 +26,6 @@ None blocking implementation.
 
 ## Delivery
 
-See the implementation PR and its Actions runs for verification.
+- [Implementation PR #11](https://github.com/hodovani/workbench/pull/11)
+- [Passing run](https://github.com/hodovani/workbench/actions/runs/45414440220) produced the summary and PR comment.
+- [Controlled lint failure](https://github.com/hodovani/workbench/actions/runs/45414893448) left the build red while the other reported checks ran and the summary published. The deliberate failure was reverted.

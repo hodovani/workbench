@@ -69,3 +69,17 @@ GitHub Actions: lint -> build -> deploy static export to GitHub Pages.
 
 - Cover meaningful edge cases from the stated constraints, including input-size and value boundaries where relevant.
 - Keep test inputs within the stated constraints.
+
+## 11. PR handoff
+
+For implementation tasks, finish by opening a draft GitHub PR against `main`
+unless I ask to keep the work local.
+
+1. Confirm the requested outcome is met and the required local checks pass.
+   If a required check is blocked or fails, report the blocker.
+2. Commit only changes for this task on a feature branch. Preserve unrelated
+   edits and staged changes. Run the repository's normal commit hooks.
+3. Push the branch and open a draft PR with `gh pr create --draft --base main`.
+   If the branch already has a PR, update it. Include what changed, how you
+   verified it, and a link to the intent file if one exists.
+4. Return the PR URL. Leave merging to me.

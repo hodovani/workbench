@@ -34,7 +34,7 @@ const count = (value: number) => value.toLocaleString("en-US");
 const time = (ms: number | null | undefined) =>
   ms == null ? "Insufficient data" : `${count(Math.round(ms))} ms`;
 
-function Dashboard({ data }: { data: MetricsSummary }) {
+function Dashboard({ data, today }: { data: MetricsSummary; today: boolean }) {
   const sectionId = useId();
   const total = (kind: keyof MetricsSummary["counts"]) =>
     Object.values(data.counts[kind] ?? {}).reduce(
@@ -50,7 +50,9 @@ function Dashboard({ data }: { data: MetricsSummary }) {
   return (
     <>
       <p className="metrics-period">
-        {data.from} to {data.through} UTC · Last 28 complete days
+        {today
+          ? `${data.through} UTC · Partial day`
+          : `${data.from} to ${data.through} UTC · Last 28 complete days`}
       </p>
       <dl className="metrics-cards">
         <div>
@@ -78,66 +80,69 @@ function Dashboard({ data }: { data: MetricsSummary }) {
         </div>
       </dl>
 
-      <section
-        className="metrics-panel"
-        aria-labelledby={`${sectionId}-reply-volume`}
-      >
-        <h2 id={`${sectionId}-reply-volume`}>Daily replies</h2>
-        {data.daily.length ? (
-          <>
-            <svg
-              className="metrics-bars"
-              viewBox={`0 0 ${data.daily.length * 10} 100`}
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              {data.daily.map(({ day, replies }, index) => {
-                const height = (replies / maxReplies) * 100;
-                return (
-                  <rect
-                    key={day}
-                    x={index * 10 + 1}
-                    y={100 - height}
-                    width={8}
-                    height={height}
-                  >
-                    <title>
-                      {day} UTC · {count(replies)} replies
-                    </title>
-                  </rect>
-                );
-              })}
-            </svg>
-            <div className="metrics-axis" aria-hidden="true">
-              <span>{data.daily[0]?.day}</span>
-              <span>{data.through}</span>
-            </div>
-            <details>
-              <summary>View daily totals</summary>
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Date (UTC)</th>
-                    <th scope="col">Replies</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.daily.map(({ day, replies }) => (
-                    <tr key={day}>
-                      <th scope="row">{day}</th>
-                      <td>{count(replies)}</td>
+      {!today && (
+        <section
+          className="metrics-panel"
+          aria-labelledby={`${sectionId}-reply-volume`}
+        >
+          <h2 id={`${sectionId}-reply-volume`}>Daily replies</h2>
+          {data.daily.length ? (
+            <>
+              <svg
+                className="metrics-bars"
+                viewBox={`0 0 ${data.daily.length * 10} 100`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                {data.daily.map(({ day, replies }, index) => {
+                  const height = (replies / maxReplies) * 100;
+                  return (
+                    <rect
+                      key={day}
+                      x={index * 10 + 1}
+                      y={100 - height}
+                      width={8}
+                      height={height}
+                    >
+                      <title>
+                        {day} UTC · {count(replies)} replies
+                      </title>
+                    </rect>
+                  );
+                })}
+              </svg>
+              <div className="metrics-axis" aria-hidden="true">
+                <span>{data.daily[0]?.day}</span>
+                <span>{data.through}</span>
+              </div>
+              <details>
+                <summary>View daily totals</summary>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Date (UTC)</th>
+                      <th scope="col">Replies</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
-          </>
-        ) : (
-          <p>
-            Daily totals will appear after the first day of collected activity.
-          </p>
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {data.daily.map(({ day, replies }) => (
+                      <tr key={day}>
+                        <th scope="row">{day}</th>
+                        <td>{count(replies)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            </>
+          ) : (
+            <p>
+              Daily totals will appear after the first day of collected
+              activity.
+            </p>
+          )}
+        </section>
+      )}
 
       <section
         className="metrics-panel"
@@ -243,7 +248,7 @@ function Dashboard({ data }: { data: MetricsSummary }) {
             : "is pending"}
           . Last refreshed{" "}
           <time dateTime={data.refreshedAt}>
-            {data.refreshedAt.slice(0, 16).replace("T", " ")} UTC
+            {data.refreshedAt.slice(0, today ? 19 : 16).replace("T", " ")} UTC
           </time>
           .
         </p>
@@ -252,7 +257,7 @@ function Dashboard({ data }: { data: MetricsSummary }) {
   );
 }
 
-export default function MetricsPage() {
+function MetricsResult({ today }: { today: boolean }) {
   const [data, setData] = useState<MetricsSummary | null | undefined>();
 
   useEffect(() => {
@@ -264,8 +269,14 @@ export default function MetricsPage() {
         "/metrics/summary",
         new URL(endpoint, window.location.href),
       );
-      const response = await fetch(url, { signal: controller.signal });
-      return response.ok ? ((await response.json()) as MetricsSummary) : null;
+      if (today) url.searchParams.set("period", "today");
+      const response = await fetch(url, {
+        signal: controller.signal,
+        cache: today ? "no-store" : "default",
+      });
+      if (!response.ok) return null;
+      const summary = (await response.json()) as MetricsSummary;
+      return today && summary.from !== summary.through ? null : summary;
     }
     void load().then(
       (summary) => {
@@ -276,7 +287,20 @@ export default function MetricsPage() {
       },
     );
     return () => controller.abort();
-  }, []);
+  }, [today]);
+
+  return data ? (
+    <Dashboard data={data} today={today} />
+  ) : (
+    <p role="status">
+      {data === null ? "Metrics unavailable" : "Loading metrics…"}
+    </p>
+  );
+}
+
+export default function MetricsPage() {
+  const [today, setToday] = useState(false);
+  const [refresh, setRefresh] = useState(0);
 
   return (
     <main className="metrics-page">
@@ -284,13 +308,31 @@ export default function MetricsPage() {
       <p className="metrics-lede">
         Usage, response speed, and reliability for Workbench Chat.
       </p>
-      {data ? (
-        <Dashboard data={data} />
-      ) : (
-        <p role="status">
-          {data === null ? "Metrics unavailable" : "Loading metrics…"}
-        </p>
-      )}
+      <fieldset className="metrics-controls" aria-label="Reporting period">
+        <button
+          type="button"
+          aria-pressed={!today}
+          onClick={() => setToday(false)}
+        >
+          Last 28 complete days
+        </button>
+        <button
+          type="button"
+          aria-pressed={today}
+          onClick={() => setToday(true)}
+        >
+          Today (UTC)
+        </button>
+        {today && (
+          <button
+            type="button"
+            onClick={() => setRefresh((value) => value + 1)}
+          >
+            Refresh
+          </button>
+        )}
+      </fieldset>
+      <MetricsResult key={`${today}-${refresh}`} today={today} />
     </main>
   );
 }

@@ -61,8 +61,9 @@ no chat text or account identifiers. Browser reports are best effort and the
 origin check and rate limit provide only basic abuse control. Direct callers
 can contribute Worker traffic. Aggregates cover 28 complete UTC days, with
 daily totals starting on the date of the first report. The first day may be
-partial. The summary cache lasts five minutes and a daily cron prunes recordings
-older than 35 days.
+partial. The historical summary cache lasts five minutes. Request
+`GET /metrics/summary?period=today` for the current partial UTC day, cached
+separately for 15 seconds. A daily cron prunes recordings older than 35 days.
 
 Initialize the local database before running `pnpm dev`:
 
@@ -83,5 +84,6 @@ pnpm exec wrangler deploy --config worker/wrangler.toml
 Run the create command only when the named database is absent. Use the existing
 Gemini secret and Pages Worker URL. Verify the summary on the deployed Worker
 and use a separate local or staging dataset when exercising guest and signed-in
-sends. Verify the live Metrics route after Pages deployment. The dashboard
-leaves today's activity out until the next UTC day.
+sends. Verify the live Metrics route after Pages deployment. Use Today (UTC)
+and Refresh to check current-day activity. For this feature, deploy the Worker
+with the Today endpoint before publishing the updated Pages frontend.

@@ -154,3 +154,87 @@ it("computes the median and p95 across the full window, including only full repl
     clock.mockRestore();
   }
 });
+
+it("counts Today's events from UTC midnight to the snapshot time", async () => {
+  const { app, env, sqlite } = fixture();
+  const midnight = Date.parse("2026-11-25T00:00:00Z");
+  const now = midnight + 60_000;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+  const request = () =>
+    app.fetch(
+      new Request("https://worker.test/metrics/summary?period=today"),
+      env,
+    );
+
+  try {
+    const empty = await request();
+    expect(empty.headers.get("cache-control")).toBe("public, max-age=15");
+    expect(await empty.json()).toMatchObject({
+      from: "2026-11-25",
+      through: "2026-11-25",
+      refreshedAt: "2026-11-25T00:01:00.000Z",
+      counts: {},
+      latency: {},
+    });
+
+    const insert = sqlite.prepare(
+      "INSERT INTO metrics VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    insert.run("yesterday", midnight - 1, "worker", "completed", 40, 80);
+    insert.run("at-midnight", midnight, "worker", "completed", 100, 200);
+    insert.run("browser", now - 1, "send", "completed", 150, null);
+    insert.run("at-snapshot", now, "worker", "completed", 500, 600);
+    expect(await (await request()).json()).toMatchObject({
+      daily: [{ day: "2026-11-25", replies: 1 }],
+      counts: { worker: { completed: 1 }, send: { completed: 1 } },
+      latency: {
+        worker_complete: { n: 1, p50: 200, p95: null },
+        browser_first: { n: 1, p50: 150, p95: null },
+      },
+    });
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("keeps the history and each UTC day's Today cache separate", async () => {
+  const { app, env } = fixture();
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(Date.parse("2026-11-25T23:59:58Z"));
+  const entries = new Map<string, Response>();
+  vi.stubGlobal("caches", {
+    default: {
+      async match(key: Request) {
+        return entries.get(key.url)?.clone();
+      },
+      async put(key: Request, response: Response) {
+        entries.set(key.url, response);
+      },
+    },
+  });
+  const request = (query = "") =>
+    app.fetch(new Request(`https://worker.test/metrics/summary${query}`), env, {
+      waitUntil: () => {},
+    });
+
+  try {
+    expect((await (await request()).json()).through).toBe("2026-11-24");
+    const response = await request("?period=today");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=2");
+    const today = await response.json();
+    expect(today.through).toBe("2026-11-25");
+    clock.mockReturnValue(Date.parse("2026-11-25T23:59:58.500Z"));
+    expect((await (await request("?period=today")).json()).refreshedAt).toBe(
+      today.refreshedAt,
+    );
+    clock.mockReturnValue(Date.parse("2026-11-26T00:00:01Z"));
+    expect((await (await request("?period=today")).json()).through).toBe(
+      "2026-11-26",
+    );
+    expect(entries.size).toBe(3);
+  } finally {
+    vi.unstubAllGlobals();
+    clock.mockRestore();
+  }
+});

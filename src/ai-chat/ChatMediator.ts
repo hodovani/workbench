@@ -1,9 +1,11 @@
+import type { BrowserMetric, SaveKind } from "@/metrics/types";
 import type {
   ChatRepository,
   ChatThread,
   ChatThreadMeta,
 } from "@/storage/types";
 import { ProxyStreamStrategy } from "./ProxyStreamStrategy";
+import { reportMetric } from "./reportMetric";
 import { ObservableThreadStore } from "./ThreadStore";
 import type { ChatSnapshot, LLMStrategy, Message } from "./types";
 import { MessageStatus } from "./types";
@@ -32,12 +34,14 @@ export class ChatMediator {
   private activeResponseId: string | null = null;
   private pendingInitialSave: Exchange | null = null;
   private pendingFinalSave: Exchange | null = null;
+  private initialSend: { started: number; first: number | null } | null = null;
   private frozenImport: ChatThread | null = null;
   private snapshot: ChatSnapshot;
 
   constructor(
     threadStore: ObservableThreadStore = new ObservableThreadStore(),
     llmStrategy: LLMStrategy = new ProxyStreamStrategy(),
+    private readonly report: (metric: BrowserMetric) => void = reportMetric,
   ) {
     this.threadStore = threadStore;
     this.llmStrategy = llmStrategy;
@@ -63,6 +67,7 @@ export class ChatMediator {
     if (this.repository && this.userId === userId) return;
 
     const wasGuest = this.userId === null;
+    this.finishSend("interrupted");
     if (this.controller) this.interruptGeneration();
     const guestMessages = wasGuest ? this.threadStore.getSnapshot() : [];
     const operation = ++this.operation;
@@ -129,6 +134,7 @@ export class ChatMediator {
       this.phase = "idle";
       this.notifyStateChange();
     } else if (this.phase === "saving" && this.pendingInitialSave) {
+      this.finishSend("interrupted");
       this.operation += 1;
       this.phase = "idle";
       this.error = "Save acknowledgement was interrupted. Retry saving.";
@@ -141,6 +147,7 @@ export class ChatMediator {
     const promptText = text.trim();
     if (!promptText || !this.getSnapshot().canSend) return false;
 
+    this.initialSend = { started: performance.now(), first: null };
     const now = Date.now();
     if (!this.threadId) this.threadId = crypto.randomUUID();
     const exchange: Exchange = {
@@ -178,14 +185,19 @@ export class ChatMediator {
     this.recovery = null;
     this.notifyStateChange();
     try {
-      await this.repository.saveExchange(
+      await this.measureSave(
+        "save_initial",
+        this.repository,
         this.userId,
         exchange.threadId,
         prompt,
         response,
       );
     } catch (error) {
-      if (operation === this.operation) this.failSave(error);
+      if (operation === this.operation) {
+        this.finishSend("save_failed");
+        this.failSave(error);
+      }
       return false;
     }
     if (operation !== this.operation || this.pendingInitialSave !== exchange)
@@ -233,7 +245,9 @@ export class ChatMediator {
       this.phase = "saving";
       this.notifyStateChange();
       try {
-        await this.repository.saveExchange(
+        await this.measureSave(
+          "retry_initial",
+          this.repository,
           this.userId,
           exchange.threadId,
           prompt,
@@ -271,7 +285,9 @@ export class ChatMediator {
     this.recovery = null;
     this.notifyStateChange();
     try {
-      await this.repository.saveExchange(
+      await this.measureSave(
+        this.pendingInitialSave ? "retry_initial" : "retry_final",
+        this.repository,
         this.userId,
         exchange.threadId,
         prompt,
@@ -446,8 +462,15 @@ export class ChatMediator {
           content: message.content + chunk,
           status: MessageStatus.Streaming,
         }));
+        if (chunk && this.initialSend)
+          this.initialSend.first ??= Math.round(
+            performance.now() - this.initialSend.started,
+          );
       }
       if (operation !== this.operation || controller.signal.aborted) return;
+      this.finishSend(
+        this.initialSend?.first == null ? "reply_failed" : "completed",
+      );
       this.threadStore.updateMessage(exchange.responseId, (message) => ({
         ...message,
         status: MessageStatus.Done,
@@ -455,6 +478,7 @@ export class ChatMediator {
     } catch (error) {
       if (operation !== this.operation || controller.signal.aborted) return;
       failed = true;
+      this.finishSend("reply_failed");
       this.error =
         error instanceof Error ? error.message : "The response failed.";
       this.threadStore.updateMessage(exchange.responseId, (message) => ({
@@ -477,7 +501,9 @@ export class ChatMediator {
       );
       if (prompt && response) {
         try {
-          await this.repository.saveExchange(
+          await this.measureSave(
+            "save_final",
+            this.repository,
             this.userId,
             exchange.threadId,
             prompt,
@@ -499,7 +525,36 @@ export class ChatMediator {
     this.notifyStateChange();
   }
 
+  private finishSend(
+    outcome: Extract<BrowserMetric, { kind: "send" }>["outcome"],
+  ): void {
+    const send = this.initialSend;
+    if (!send) return;
+    this.initialSend = null;
+    this.report({ kind: "send", outcome, ms: send.first });
+  }
+
+  private async measureSave(
+    kind: SaveKind,
+    repository: ChatRepository,
+    ...args: Parameters<ChatRepository["saveExchange"]>
+  ): Promise<void> {
+    const started = performance.now();
+    let outcome: "ok" | "failed" = "failed";
+    try {
+      await repository.saveExchange(...args);
+      outcome = "ok";
+    } finally {
+      this.report({
+        kind,
+        outcome,
+        ms: Math.round(performance.now() - started),
+      });
+    }
+  }
+
   private interruptGeneration(): void {
+    this.finishSend("interrupted");
     const responseId = this.activeResponseId;
     this.controller?.abort();
     this.controller = null;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { chatMediator } from "@/ai-chat/ChatMediator";
 import { useAuth } from "@/auth";
 
@@ -8,7 +9,11 @@ export function WorkbenchNavbar() {
 
   return (
     <header>
-      <strong>Workbench</strong>
+      <nav className="workbench-nav" aria-label="Workbench">
+        <strong>Workbench</strong>
+        <Link href="/">Chat</Link>
+        <Link href="/metrics">Metrics</Link>
+      </nav>
       <hr />
       {error && <p role="alert">{error}</p>}
       {loading ? (

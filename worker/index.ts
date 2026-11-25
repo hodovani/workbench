@@ -1,4 +1,14 @@
-interface Env {
+import {
+  type Background,
+  ingestMetrics,
+  type MetricsEnv,
+  pruneMetrics,
+  recordGeneration,
+  serveSummary,
+  type WorkerOutcome,
+} from "./metrics";
+
+interface Env extends MetricsEnv {
   GEMINI_API_KEY?: string;
   ALLOWED_ORIGIN?: string;
 }
@@ -32,8 +42,11 @@ function response(body: string, status: number, origin?: string) {
   return new Response(body, { status, headers });
 }
 
-async function readBody(request: Request): Promise<Uint8Array> {
-  if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) {
+async function readBody(
+  request: Request,
+  maxBytes = MAX_BODY_BYTES,
+): Promise<Uint8Array> {
+  if (Number(request.headers.get("content-length")) > maxBytes) {
     throw new RangeError("body too large");
   }
   if (!request.body) throw new TypeError("missing body");
@@ -45,7 +58,7 @@ async function readBody(request: Request): Promise<Uint8Array> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         await reader.cancel();
         throw new RangeError("body too large");
       }
@@ -100,7 +113,11 @@ function sseData(block: string): string | undefined {
 
 export function createWorker(fetcher: typeof fetch = fetch) {
   return {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(
+      request: Request,
+      env: Env,
+      ctx?: Background,
+    ): Promise<Response> {
       const origin = request.headers.get("origin") ?? undefined;
       const allowed = (env.ALLOWED_ORIGIN ?? "")
         .split(",")
@@ -123,11 +140,31 @@ export function createWorker(fetcher: typeof fetch = fetch) {
         const result = new Response(null, { status: 204, headers });
         return result;
       }
+      const path = new URL(request.url).pathname;
+      if (path === "/metrics/events" || path === "/metrics/summary") {
+        let result: Response;
+        try {
+          result =
+            path === "/metrics/events"
+              ? await ingestMetrics(request, env, async () =>
+                  JSON.parse(
+                    new TextDecoder().decode(await readBody(request, 512)),
+                  ),
+                )
+              : await serveSummary(request, env, ctx);
+        } catch {
+          console.error("Metrics storage unavailable");
+          result = new Response(null, { status: 503 });
+        }
+        if (origin) {
+          result = new Response(result.body, result);
+          result.headers.set("access-control-allow-origin", origin);
+          result.headers.set("vary", "Origin");
+        }
+        return result;
+      }
       if (request.method !== "POST") {
         return response(event("error", "invalid_request"), 405, origin);
-      }
-      if (!env.GEMINI_API_KEY) {
-        return response(event("error", "service_unavailable"), 503, origin);
       }
 
       let messages: InputMessage[];
@@ -136,6 +173,8 @@ export function createWorker(fetcher: typeof fetch = fetch) {
           JSON.parse(new TextDecoder().decode(await readBody(request))),
         );
       } catch (error) {
+        if (!env.GEMINI_API_KEY)
+          return response(event("error", "service_unavailable"), 503, origin);
         const tooLarge = error instanceof RangeError;
         return response(
           event("error", "invalid_request"),
@@ -144,10 +183,34 @@ export function createWorker(fetcher: typeof fetch = fetch) {
         );
       }
 
+      const started = performance.now();
+      let first: number | null = null;
+      let recorded = false;
+      const finish = (outcome: WorkerOutcome) => {
+        if (recorded) return;
+        recorded = true;
+        request.signal.removeEventListener("abort", abort);
+        recordGeneration(
+          env,
+          ctx,
+          outcome,
+          first,
+          outcome === "completed"
+            ? Math.round(performance.now() - started)
+            : null,
+        );
+      };
       const abortController = new AbortController();
-      request.signal.addEventListener("abort", () => abortController.abort(), {
-        once: true,
-      });
+      const abort = () => {
+        finish("disconnected");
+        abortController.abort();
+      };
+      if (!env.GEMINI_API_KEY) {
+        finish("unavailable");
+        return response(event("error", "service_unavailable"), 503, origin);
+      }
+      if (request.signal.aborted) abort();
+      else request.signal.addEventListener("abort", abort, { once: true });
       let upstream: Response;
       try {
         upstream = await fetcher(GEMINI_URL, {
@@ -170,10 +233,12 @@ export function createWorker(fetcher: typeof fetch = fetch) {
           signal: abortController.signal,
         });
       } catch {
+        finish("upstream_error");
         return response(event("error", "service_unavailable"), 503, origin);
       }
 
       if (!upstream.ok || !upstream.body) {
+        finish(upstream.status === 429 ? "quota" : "upstream_error");
         await upstream.body?.cancel();
         return response(
           event(
@@ -191,92 +256,77 @@ export function createWorker(fetcher: typeof fetch = fetch) {
       const decoder = new TextDecoder();
       let buffer = "";
       let cancelled = false;
+      const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
+          const consume = (block: string) => {
+            const data = sseData(block);
+            if (!data || data === "[DONE]") return false;
+            const parsed = JSON.parse(data) as {
+              event_type?: string;
+              delta?: { type?: string; text?: string };
+            };
+            if (parsed.event_type === "interaction.completed") {
+              finish(first === null ? "empty" : "completed");
+              controller.enqueue(encoder.encode(event("done")));
+              controller.close();
+              return true;
+            }
+            if (parsed.event_type === "error") {
+              finish("upstream_error");
+              throw new Error("Upstream stream error");
+            }
+            if (
+              parsed.event_type === "step.delta" &&
+              parsed.delta?.type === "text" &&
+              parsed.delta.text
+            ) {
+              first ??= Math.round(performance.now() - started);
+              controller.enqueue(
+                encoder.encode(event("delta", parsed.delta.text)),
+              );
+            }
+            return false;
+          };
           void (async () => {
             try {
               while (true) {
+                const { value, done } = await reader.read();
+                if (cancelled) return;
+                buffer += decoder.decode(value, { stream: !done });
                 while (true) {
                   const boundary = /\r?\n\r?\n/.exec(buffer);
                   if (!boundary) break;
                   const block = buffer.slice(0, boundary.index);
                   buffer = buffer.slice(boundary.index + boundary[0].length);
-                  const data = sseData(block);
-                  if (!data || data === "[DONE]") continue;
-                  const parsed = JSON.parse(data) as {
-                    event_type?: string;
-                    delta?: { type?: string; text?: string };
-                  };
-                  if (parsed.event_type === "interaction.completed") {
-                    controller.enqueue(new TextEncoder().encode(event("done")));
-                    controller.close();
-                    await reader.cancel();
-                    return;
-                  }
-                  if (
-                    parsed.event_type === "step.delta" &&
-                    parsed.delta?.type === "text" &&
-                    parsed.delta.text
-                  ) {
-                    controller.enqueue(
-                      new TextEncoder().encode(
-                        event("delta", parsed.delta.text),
-                      ),
-                    );
-                  }
+                  if (consume(block)) return;
                 }
 
-                const { value, done } = await reader.read();
-                buffer += decoder.decode(value, { stream: !done });
                 if (!done) continue;
-                if (buffer.trim()) {
-                  const data = sseData(buffer);
-                  if (data && data !== "[DONE]") {
-                    const parsed = JSON.parse(data) as {
-                      event_type?: string;
-                      delta?: { type?: string; text?: string };
-                    };
-                    if (parsed.event_type === "interaction.completed") {
-                      controller.enqueue(
-                        new TextEncoder().encode(event("done")),
-                      );
-                      controller.close();
-                      return;
-                    }
-                    if (
-                      parsed.event_type === "step.delta" &&
-                      parsed.delta?.type === "text" &&
-                      parsed.delta.text
-                    ) {
-                      controller.enqueue(
-                        new TextEncoder().encode(
-                          event("delta", parsed.delta.text),
-                        ),
-                      );
-                    }
-                  }
-                }
+                if (buffer.trim() && consume(buffer)) return;
+                finish("incomplete");
                 controller.enqueue(
-                  new TextEncoder().encode(
-                    event("error", "service_unavailable"),
-                  ),
+                  encoder.encode(event("error", "service_unavailable")),
                 );
                 controller.close();
                 return;
               }
             } catch {
               if (cancelled) return;
+              finish("incomplete");
               controller.enqueue(
-                new TextEncoder().encode(event("error", "service_unavailable")),
+                encoder.encode(event("error", "service_unavailable")),
               );
               controller.close();
+            } finally {
+              if (!cancelled) await reader.cancel().catch(() => {});
             }
           })();
         },
         async cancel() {
           cancelled = true;
-          abortController.abort();
-          await reader.cancel();
+          abort();
+          await reader.cancel().catch(() => {});
         },
       });
       return new Response(body, {
@@ -288,6 +338,9 @@ export function createWorker(fetcher: typeof fetch = fetch) {
             : {}),
         },
       });
+    },
+    async scheduled(_event: unknown, env: Env) {
+      await pruneMetrics(env);
     },
   };
 }

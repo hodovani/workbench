@@ -13,7 +13,10 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { ChatMediator } from "@/ai-chat/ChatMediator";
+import { ProxyStreamStrategy } from "@/ai-chat/ProxyStreamStrategy";
 import type { Message } from "@/ai-chat/types";
+import type { BrowserMetric } from "@/metrics/types";
 import { FirestoreChatRepository } from "./FirestoreChatRepository";
 
 let environment: RulesTestEnvironment;
@@ -81,6 +84,38 @@ describeEmulator("FirestoreChatRepository (Firestore emulator)", () => {
       collection(db, "users", "owner", "threads", "thread", "messages"),
     );
     expect(messages.size).toBe(4);
+  });
+
+  it("reports signed-in send and save measurements while persisting an exchange", async () => {
+    const db = environment.authenticatedContext("owner").firestore();
+    const repo = new FirestoreChatRepository(db as unknown as Firestore);
+    const strategy = new ProxyStreamStrategy(
+      "https://worker.test",
+      async () =>
+        new Response(
+          '{"type":"delta","text":"Example reply"}\n{"type":"done"}\n',
+        ),
+    );
+    const reports: BrowserMetric[] = [];
+    const chat = new ChatMediator(undefined, strategy, (report) =>
+      reports.push(report),
+    );
+
+    await chat.attach(repo, "owner");
+    expect(await chat.sendMessage("Example prompt")).toBe(true);
+
+    const [thread] = await repo.listThreads("owner");
+    expect(thread).toBeDefined();
+    expect(
+      (await repo.getThread("owner", thread?.id ?? ""))?.messages
+        .map(({ content }) => content)
+        .sort(),
+    ).toEqual(["Example prompt", "Example reply"]);
+    expect(reports).toEqual([
+      { kind: "save_initial", outcome: "ok", ms: expect.any(Number) },
+      { kind: "send", outcome: "completed", ms: expect.any(Number) },
+      { kind: "save_final", outcome: "ok", ms: expect.any(Number) },
+    ]);
   });
 
   it("imports once, accepts the same fingerprint after later changes, and rejects conflicting reuse", async () => {

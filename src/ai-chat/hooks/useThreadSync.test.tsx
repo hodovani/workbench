@@ -95,7 +95,7 @@ describe("useThreadSync", () => {
     expect(detach).not.toHaveBeenCalled();
   });
 
-  it("releases in-flight generation when the page unmounts", async () => {
+  it("releases in-flight generation when the session unmounts", async () => {
     const attach = vi.spyOn(chatMediator, "attach").mockResolvedValue();
     const release = vi
       .spyOn(chatMediator, "release")

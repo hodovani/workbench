@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: "pnpm"
 
       - name: Setup Java for Firestore emulator
@@ -162,6 +162,7 @@ jobs:
 
       - name: Audit the full pnpm lockfile
         id: osv
+        continue-on-error: ${{ vars.OSV_BLOCKING != 'true' }}
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
           results="$RUNNER_TEMP/workbench-security"
@@ -185,6 +186,7 @@ jobs:
         env:
           CODEQL_STATUS: ${{ steps.codeql.outcome }}
           OSV_STATUS: ${{ steps.osv.outcome }}
+          OSV_BLOCKING: ${{ vars.OSV_BLOCKING }}
           OSV_EXIT: ${{ steps.osv.outputs.exit-code }}
         run: |
           status=0

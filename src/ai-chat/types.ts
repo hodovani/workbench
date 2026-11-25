@@ -16,7 +16,7 @@ export type ChatPhase =
   | "saving"
   | "streaming"
   | "importing";
-export type ChatRecovery = "load" | "save" | null;
+type ChatRecovery = "load" | "save" | null;
 
 export interface Message {
   id: string;

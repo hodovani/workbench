@@ -79,6 +79,8 @@ function securityReport(
     missing,
     invalid,
     osvExit = "0",
+    osvBlocking = "",
+    codeqlScores = [],
     codeqlStatus = "success",
   } = {},
 ) {
@@ -90,7 +92,12 @@ function securityReport(
     "dependencies.sarif",
   ]) {
     if (file === missing) continue;
-    const findings = file === "dependencies.sarif" ? scores : [];
+    const findings =
+      file === "dependencies.sarif"
+        ? scores
+        : file === "javascript.sarif"
+          ? codeqlScores
+          : [];
     const rules = findings.map((score, index) => ({
       id: `rule-${index}`,
       properties: score === null ? {} : { "security-severity": String(score) },
@@ -117,6 +124,7 @@ function securityReport(
       CODEQL_STATUS: codeqlStatus,
       OSV_STATUS: "success",
       OSV_EXIT: osvExit,
+      OSV_BLOCKING: osvBlocking,
     },
   });
 }
@@ -144,7 +152,11 @@ test("fails independently at the high and critical thresholds", (t) => {
     [7, /Failed \| 1 \| 0/],
     [9, /Failed \| 0 \| 1/],
   ]) {
-    const result = securityReport(t, { scores: [score], osvExit: "1" });
+    const result = securityReport(t, {
+      scores: [score],
+      osvExit: "1",
+      osvBlocking: "true",
+    });
     assert.equal(result.status, 1);
     assert.match(result.stdout, expected);
   }
@@ -165,4 +177,25 @@ test("reports unavailable scans while retaining completed results", (t) => {
   assert.equal(partial.status, 1);
   assert.match(partial.stdout, /\| Application and Worker code \| Passed \|/);
   assert.match(partial.stdout, /\| Dependencies \| Passed \|/);
+});
+
+test("warns about serious OSV findings by default", (t) => {
+  const result = securityReport(t, { scores: [7, 9], osvExit: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /\| Dependencies \| Warning \| 1 \| 1 \|/);
+});
+
+test("keeps CodeQL blocking while OSV is advisory", (t) => {
+  const result = securityReport(t, { codeqlScores: [7], osvExit: "127" });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /\| Application and Worker code \| Failed \|/);
+  assert.match(result.stdout, /\| Dependencies \| Unavailable \|/);
+});
+
+test("fails unavailable OSV scans only in blocking mode", (t) => {
+  const advisory = securityReport(t, { osvExit: "127" });
+  const blocking = securityReport(t, { osvExit: "127", osvBlocking: "true" });
+  assert.equal(advisory.status, 0);
+  assert.equal(blocking.status, 1);
+  assert.match(advisory.stdout, /\| Dependencies \| Unavailable \|/);
 });

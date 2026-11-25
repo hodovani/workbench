@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Message } from "@/ai-chat/types";
 import type { ChatRepository, ChatThread } from "@/storage/types";
 import { ChatMediator } from "./ChatMediator";
+import {
+  accountFixture,
+  controlledStrategy,
+} from "./ChatMediator.test-helpers";
 import { ObservableThreadStore } from "./ThreadStore";
 
 const message = (content: string): Message => ({
@@ -112,4 +116,76 @@ it("commits a signed-in prompt and pending response before starting generation",
   await mediator.sendMessage("durable prompt");
 
   expect(events).toEqual(["saved:loading", "generated", "saved:done"]);
+});
+
+it("recovers a saved conversation after a transient load failure", async () => {
+  const thread = {
+    id: "saved",
+    title: "Saved",
+    createdAt: 1,
+    updatedAt: 1,
+    messages: [message("saved prompt")],
+  };
+  const { repository, userId } = accountFixture("account-a", [thread]);
+  const getThread = vi.spyOn(repository, "getThread");
+  getThread.mockRejectedValueOnce(new Error("offline"));
+  const mediator = new ChatMediator();
+
+  await mediator.attach(repository, userId);
+  expect(mediator.getSnapshot()).toMatchObject({
+    recovery: "load",
+    error: "offline",
+  });
+
+  getThread.mockRejectedValueOnce(new Error("still offline"));
+  expect(await mediator.retryLoad()).toBe(false);
+  expect(mediator.getSnapshot()).toMatchObject({
+    recovery: "load",
+    error: "still offline",
+  });
+
+  expect(await mediator.retryLoad()).toBe(true);
+  expect(mediator.getSnapshot()).toMatchObject({
+    threadId: thread.id,
+    phase: "idle",
+    recovery: null,
+    error: null,
+    messages: thread.messages,
+  });
+});
+
+it("retries a reply after recovering from a save failure", async () => {
+  const { strategy, calls } = controlledStrategy();
+  const { repository, userId } = accountFixture("account-a");
+  const mediator = new ChatMediator(undefined, strategy);
+  await mediator.attach(repository, userId);
+
+  const initial = mediator.sendMessage("prompt");
+  await vi.waitFor(() => expect(calls).toHaveLength(1));
+  calls[0]?.stream.fail(new Error("upstream error"));
+  await initial;
+  expect(mediator.getSnapshot().messages.at(-1)).toMatchObject({
+    status: "error",
+    content: "upstream error",
+  });
+
+  vi.spyOn(repository, "saveExchange").mockRejectedValueOnce(
+    new Error("offline"),
+  );
+  expect(await mediator.retryLastMessage()).toBe(false);
+  expect(calls).toHaveLength(1);
+  expect(mediator.getSnapshot()).toMatchObject({
+    recovery: "save",
+    error: "offline",
+  });
+
+  const retry = mediator.retrySave();
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  calls[1]?.stream.push("recovered reply");
+  calls[1]?.stream.finish();
+  expect(await retry).toBe(true);
+  expect(mediator.getSnapshot().messages.at(-1)).toMatchObject({
+    status: "done",
+    content: "recovered reply",
+  });
 });

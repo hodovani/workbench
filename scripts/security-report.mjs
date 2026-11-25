@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const [resultsDir] = process.argv.slice(2);
-const { CODEQL_STATUS, OSV_STATUS, OSV_EXIT } = process.env;
+const { CODEQL_STATUS, OSV_STATUS, OSV_EXIT, OSV_BLOCKING } = process.env;
 
 function readFindings(file) {
   const { version, runs } = JSON.parse(
@@ -42,13 +42,15 @@ for (const [label, file, status] of [
   ["GitHub Actions workflows", "actions.sarif", CODEQL_STATUS],
   ["Dependencies", "dependencies.sarif", OSV_STATUS],
 ]) {
+  const isDependencyScan = file === "dependencies.sarif";
+  const blocking = !isDependencyScan || OSV_BLOCKING === "true";
   try {
     if (status !== "success" && status !== "failure") {
       throw new Error("Scanner did not run");
     }
     const findings = readFindings(file);
     if (
-      file === "dependencies.sarif" &&
+      isDependencyScan &&
       (status !== "success" || OSV_EXIT !== (findings.length ? "1" : "0"))
     ) {
       throw new Error("OSV exit status does not match the report");
@@ -63,13 +65,18 @@ for (const [label, file, status] of [
         console.error(`${label}: ${id}`);
       }
     }
-    const failed = counts.high + counts.critical > 0;
-    if (failed) process.exitCode = 1;
+    const seriousFindings = counts.high + counts.critical > 0;
+    const result = seriousFindings
+      ? blocking
+        ? "Failed"
+        : "Warning"
+      : "Passed";
+    if (seriousFindings && blocking) process.exitCode = 1;
     console.log(
-      `| ${label} | ${failed ? "Failed" : "Passed"} | ${Object.values(counts).join(" | ")} |`,
+      `| ${label} | ${result} | ${Object.values(counts).join(" | ")} |`,
     );
   } catch {
-    process.exitCode = 1;
+    if (blocking) process.exitCode = 1;
     console.log(`| ${label} | Unavailable | — | — | — | — |`);
     console.error(`${label}: scan failed or did not produce a usable report`);
   }

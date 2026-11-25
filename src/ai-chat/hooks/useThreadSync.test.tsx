@@ -21,6 +21,7 @@ const silentService: AuthService = {
 };
 
 const wrapper = (service: AuthService) =>
+  // biome-ignore lint/correctness/noComponentHookFactories: Each renderHook call creates one stable wrapper for its test service.
   function Wrapper({ children }: { children: ReactNode }) {
     return <AuthProvider authService={service}>{children}</AuthProvider>;
   };

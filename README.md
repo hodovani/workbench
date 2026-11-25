@@ -1,11 +1,10 @@
 # Workbench
 
-A portfolio of small, working examples for deliberate TypeScript, systems, and product practice.
+A portfolio of interactive engineering projects, starting with a guest-first AI chat.
 
 [Open the prototype](https://hodovani.github.io/workbench/) · [More projects & case studies](https://hodovani.github.io/projects/) · [LinkedIn / contact](https://www.linkedin.com/in/matvii-hodovaniuk/)
 
-The first interactive project is a guest-first AI chat. Visitors can try it
-without creating an account; Google sign-in saves separate conversations to
+Visitors can try AI Chat without creating an account. Google sign-in saves separate conversations to
 Firestore. The static frontend calls a small Cloudflare Worker so a Gemini key
 does not ship to browsers. The chat UI uses semantic HTML and browser defaults;
 there is no authored CSS.

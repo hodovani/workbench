@@ -40,6 +40,32 @@ html:has(.metrics-page) {
   margin-bottom: 0.5rem;
 }
 
+.metrics-controls {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
+.metrics-controls button {
+  background: #fff;
+  border: 1px solid #9ab1aa;
+  border-radius: 0.4rem;
+  color: #0c5247;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.7rem;
+}
+
+.metrics-controls button[aria-pressed="true"] {
+  background: #0c5247;
+  border-color: #0c5247;
+  color: #fff;
+}
+
 .metrics-cards {
   display: grid;
   gap: 0.8rem;

@@ -145,10 +145,15 @@ export async function ingestMetrics(
   return new Response(null, { status: 204 });
 }
 
-async function summarize(db: Database): Promise<MetricsSummary> {
-  const now = Date.now();
-  const end = now - (now % DAY);
-  const start = end - 28 * DAY;
+async function summarize(
+  db: Database,
+  now: number,
+  today: boolean,
+): Promise<MetricsSummary> {
+  const midnight = now - (now % DAY);
+  const start = today ? midnight : midnight - 28 * DAY;
+  const end = today ? now : midnight;
+  const lastDay = today ? midnight : midnight - DAY;
   const [coverage, outcomes, latencyRows] = await Promise.all([
     db
       .prepare("SELECT at FROM metrics_start WHERE id = 1")
@@ -200,14 +205,14 @@ async function summarize(db: Database): Promise<MetricsSummary> {
   if (first !== undefined) {
     for (
       let day = Math.max(start, first - (first % DAY));
-      day < end;
+      day <= lastDay;
       day += DAY
     )
       daily.push({ day: isoDay(day), replies: repliesByDay.get(day) ?? 0 });
   }
   return {
     from: isoDay(start),
-    through: isoDay(end - DAY),
+    through: isoDay(lastDay),
     startedAt: first === undefined ? null : isoDay(first),
     refreshedAt: new Date(now).toISOString(),
     daily,
@@ -226,13 +231,22 @@ export async function serveSummary(
   if (request.method !== "GET")
     return new Response(null, { status: 405, headers: { allow: "GET" } });
   if (!env.METRICS_DB) return new Response(null, { status: 503 });
+  const now = Date.now();
+  const today = new URL(request.url).searchParams.get("period") === "today";
   const cache = (globalThis as { caches?: { default?: Cache } }).caches
     ?.default;
-  const key = new Request(new URL("/metrics/summary", request.url));
+  const cacheUrl = new URL("/metrics/summary", request.url);
+  if (today) cacheUrl.searchParams.set("day", isoDay(now));
+  const key = new Request(cacheUrl);
   const hit = await cache?.match(key).catch(() => undefined);
   if (hit) return hit;
-  const response = Response.json(await summarize(env.METRICS_DB), {
-    headers: { "cache-control": "public, max-age=300" },
+  const summary = await summarize(env.METRICS_DB, now, today);
+  const nextMidnight = now - (now % DAY) + DAY;
+  const maxAge = today
+    ? Math.max(0, Math.min(15, Math.floor((nextMidnight - Date.now()) / 1000)))
+    : 300;
+  const response = Response.json(summary, {
+    headers: { "cache-control": `public, max-age=${maxAge}` },
   });
   if (cache && ctx)
     ctx.waitUntil(cache.put(key, response.clone()).catch(() => {}));

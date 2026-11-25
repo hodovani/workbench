@@ -55,6 +55,61 @@ test("distinguishes an unavailable summary from zero activity", async ({
   ).toBeVisible({ timeout: 5000 });
 });
 
+test("switches to Today, refreshes its counts, and returns to history", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  let todaySends = 0;
+  await page.context().route("**/__test/chat", (route) =>
+    route.fulfill({
+      contentType: "application/x-ndjson",
+      body: '{"type":"delta","text":"Today test answer"}\n{"type":"done"}\n',
+    }),
+  );
+  await page.context().route("**/metrics/events", (route) => {
+    todaySends += 1;
+    return route.fulfill({ status: 204 });
+  });
+  await page.route("**/metrics/summary*", (route) => {
+    const today =
+      new URL(route.request().url()).searchParams.get("period") === "today";
+    return route.fulfill({
+      json: {
+        from: today ? "2026-11-25" : "2026-10-28",
+        through: today ? "2026-11-25" : "2026-11-24",
+        startedAt: "2026-11-24",
+        refreshedAt: "2026-11-25T12:00:00Z",
+        daily: [],
+        counts: { send: { completed: today ? todaySends : 4 } },
+        latency: {},
+      },
+    });
+  });
+
+  await page.goto("/metrics");
+  await expect(page.getByText("4 of 4 reported initial sends")).toBeVisible();
+  await page.getByRole("button", { name: "Today (UTC)" }).click();
+  await expect(page.getByText("2026-11-25 UTC · Partial day")).toBeVisible();
+  await expect(page.getByText("0 of 0 reported initial sends")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Daily replies" }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+
+  const chat = await page.context().newPage();
+  await chat.goto("/");
+  await chat.getByLabel("Your message:").fill("Test Today's metrics");
+  await chat.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(chat.getByText("Today test answer")).toBeVisible();
+  await expect.poll(() => todaySends).toBe(1);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByText("1 of 1 reported initial sends")).toBeVisible();
+  await page.getByRole("button", { name: "Last 28 complete days" }).click();
+  await expect(page.getByText("4 of 4 reported initial sends")).toBeVisible();
+});
+
 test("guest replies post a content-free initial send report", async ({
   page,
 }) => {
@@ -81,6 +136,29 @@ test("guest replies post a content-free initial send report", async ({
     id: expect.any(String),
     ms: expect.any(Number),
   });
+});
+
+test("shows Today as unavailable when the Worker returns history", async ({
+  page,
+}) => {
+  await page.route("**/metrics/summary*", (route) =>
+    route.fulfill({
+      json: {
+        from: "2026-10-28",
+        through: "2026-11-24",
+        startedAt: null,
+        refreshedAt: "2026-11-25T12:00:00Z",
+        daily: [],
+        counts: {},
+        latency: {},
+      },
+    }),
+  );
+  await page.goto("/metrics");
+  await page.getByRole("button", { name: "Today (UTC)" }).click();
+  await expect(
+    page.getByText("Metrics unavailable", { exact: true }),
+  ).toBeVisible();
 });
 
 test("keeps the guest conversation and unload warning while viewing metrics", async ({

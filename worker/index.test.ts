@@ -223,3 +223,137 @@ describe("Gemini proxy Worker", () => {
     expect(output).not.toContain("upstream secret detail");
   });
 });
+
+it.each([
+  ["empty", ['data: {"event_type":"interaction.completed"}']],
+  [
+    "incomplete",
+    [
+      'data: {"event_type":"step.delta","delta":{"type":"text","text":"hello"}}\n\n',
+    ],
+  ],
+  [
+    "completed",
+    [
+      'data: {"event_type":"step.delta","delta":{"type":"text","text":"hello"}}\n\n',
+      'data: {"event_type":"interaction.completed"}',
+    ],
+  ],
+  ["quota", null],
+] as const)("records %s independently of the HTTP success status", async (outcome, events) => {
+  const app = createWorker(
+    vi
+      .fn()
+      .mockResolvedValue(
+        events ? upstream([...events]) : new Response(null, { status: 429 }),
+      ),
+  );
+  const writes: unknown[][] = [];
+  const pending: Promise<unknown>[] = [];
+  const response = await app.fetch(
+    request({ messages: [{ role: "user", content: "private" }] }),
+    {
+      GEMINI_API_KEY: "private",
+      METRICS_DB: {
+        prepare() {
+          return {
+            bind(...values: unknown[]) {
+              return {
+                async run() {
+                  writes.push(values);
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+    { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+  );
+  await response.text();
+  await Promise.all(pending);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]?.slice(2, 4)).toEqual(["worker", outcome]);
+  expect(JSON.stringify(writes)).not.toContain("private");
+});
+
+it("a failed telemetry write leaves the chat response intact", async () => {
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const app = createWorker(
+      vi
+        .fn()
+        .mockResolvedValue(
+          upstream([
+            'data: {"event_type":"step.delta","delta":{"type":"text","text":"hello"}}\n\n',
+            'data: {"event_type":"interaction.completed"}',
+          ]),
+        ),
+    );
+    const pending: Promise<unknown>[] = [];
+    const response = await app.fetch(
+      request({ messages: [{ role: "user", content: "hi" }] }),
+      {
+        GEMINI_API_KEY: "private",
+        METRICS_DB: {
+          prepare() {
+            throw new Error("database unavailable");
+          },
+        },
+      },
+      { waitUntil: (promise) => pending.push(promise) },
+    );
+    expect(await response.text()).toContain('{"type":"done"}');
+    await Promise.all(pending);
+    expect(log).toHaveBeenCalledWith("Generation metrics write failed");
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("records a client disconnect before Gemini responds", async () => {
+  const abort = new AbortController();
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(
+    (_, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(Error("aborted")),
+          { once: true },
+        );
+      }),
+  );
+  const app = createWorker(fetcher);
+  const writes: unknown[][] = [];
+  const pending: Promise<unknown>[] = [];
+  const result = app.fetch(
+    new Request(request({ messages: [{ role: "user", content: "hi" }] }), {
+      signal: abort.signal,
+    }),
+    {
+      GEMINI_API_KEY: "private",
+      METRICS_DB: {
+        prepare() {
+          return {
+            bind(...values: unknown[]) {
+              return {
+                async run() {
+                  writes.push(values);
+                },
+                async all() {
+                  return { results: [] };
+                },
+              };
+            },
+          };
+        },
+      },
+    },
+    { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+  );
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+  abort.abort();
+  expect((await result).status).toBe(503);
+  await Promise.all(pending);
+  expect(writes.map((row) => row[3])).toEqual(["disconnected"]);
+});

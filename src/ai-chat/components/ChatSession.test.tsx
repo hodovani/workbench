@@ -4,20 +4,8 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useChatSnapshot } from "@/ai-chat/hooks/useChatSnapshot";
 import type { ChatSnapshot } from "@/ai-chat/types";
-import Home from "./page";
+import { ChatSession } from "./ChatSession";
 
-vi.mock("@/ai-chat/ChatMediator", () => ({
-  chatMediator: { retryLoad: vi.fn(), retrySave: vi.fn() },
-}));
-vi.mock("@/ai-chat/components/ChatHistory", () => ({
-  ChatHistory: () => null,
-}));
-vi.mock("@/ai-chat/components/MessageInput", () => ({
-  MessageInput: () => null,
-}));
-vi.mock("@/ai-chat/components/MessageList", () => ({
-  MessageList: () => null,
-}));
 vi.mock("@/ai-chat/hooks/useChatSnapshot", () => ({
   useChatSnapshot: vi.fn(),
 }));
@@ -37,9 +25,9 @@ const emptySnapshot: ChatSnapshot = {
   canRetry: false,
 };
 
-function renderHome(snapshot: ChatSnapshot) {
+function renderSession(snapshot: ChatSnapshot) {
   vi.mocked(useChatSnapshot).mockReturnValue(snapshot);
-  return render(<Home />);
+  return render(<ChatSession />);
 }
 
 function dispatchBeforeUnload(): boolean {
@@ -48,12 +36,12 @@ function dispatchBeforeUnload(): boolean {
   return event.defaultPrevented;
 }
 
-describe("Home unsaved guest warning", () => {
+describe("Chat session unsaved guest warning", () => {
   beforeEach(() => vi.mocked(useChatSnapshot).mockReset());
   afterEach(cleanup);
 
   it("prevents leaving when a guest has a transcript", () => {
-    renderHome({
+    renderSession({
       ...emptySnapshot,
       messages: [
         {
@@ -70,19 +58,19 @@ describe("Home unsaved guest warning", () => {
   });
 
   it("does not warn for an empty guest chat", () => {
-    renderHome(emptySnapshot);
+    renderSession(emptySnapshot);
 
     expect(dispatchBeforeUnload()).toBe(false);
   });
 
   it("does not warn for a signed-in chat", () => {
-    renderHome({ ...emptySnapshot, userId: "account-1", messages: [] });
+    renderSession({ ...emptySnapshot, userId: "account-1", messages: [] });
 
     expect(dispatchBeforeUnload()).toBe(false);
   });
 
   it("removes the warning after a guest signs in", () => {
-    const { rerender } = renderHome({
+    const { rerender } = renderSession({
       ...emptySnapshot,
       messages: [
         {
@@ -99,7 +87,7 @@ describe("Home unsaved guest warning", () => {
       ...emptySnapshot,
       userId: "account-1",
     });
-    rerender(<Home />);
+    rerender(<ChatSession />);
 
     expect(dispatchBeforeUnload()).toBe(false);
   });

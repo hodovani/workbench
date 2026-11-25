@@ -8,3 +8,10 @@ html {
   white-space: break-spaces;
   overflow-wrap: anywhere;
 }
+
+.workbench-nav {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}

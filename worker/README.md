@@ -50,3 +50,38 @@ values listed in the root README. Enable Google sign-in in Firebase
 Authentication, add the Pages hostname to its authorized domains, and deploy
 `firestore.rules` to that Firebase project. Firebase web config is public
 client configuration; the Gemini Developer API key must remain a Worker secret.
+
+## Chat metrics
+
+The static Metrics page uses the proxy origin's read-only `GET /metrics/summary`.
+The Worker stores terminal generation outcomes and validated reports from
+`POST /metrics/events` in the private `workbench-chat-metrics` D1 database.
+Reports use fresh event IDs, bounded timings, and fixed status codes. They carry
+no chat text or account identifiers. Browser reports are best effort and the
+origin check and rate limit provide only basic abuse control. Direct callers
+can contribute Worker traffic. Aggregates cover 28 complete UTC days, with
+daily totals starting on the date of the first report. The first day may be
+partial. The summary cache lasts five minutes and a daily cron prunes recordings
+older than 35 days.
+
+Initialize the local database before running `pnpm dev`:
+
+```sh
+pnpm exec wrangler d1 migrations apply workbench-chat-metrics --config worker/wrangler.toml --local
+```
+
+For the first production release, create the database in the same Cloudflare
+account as the existing Worker, apply the migration and deploy the Worker
+before merging the Pages change:
+
+```sh
+pnpm exec wrangler d1 create workbench-chat-metrics
+pnpm exec wrangler d1 migrations apply workbench-chat-metrics --config worker/wrangler.toml --remote
+pnpm exec wrangler deploy --config worker/wrangler.toml
+```
+
+Run the create command only when the named database is absent. Use the existing
+Gemini secret and Pages Worker URL. Verify the summary on the deployed Worker
+and use a separate local or staging dataset when exercising guest and signed-in
+sends. Verify the live Metrics route after Pages deployment. The dashboard
+leaves today's activity out until the next UTC day.

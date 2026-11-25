@@ -1,4 +1,5 @@
 import "./globals.css";
+import { ChatSession } from "@/ai-chat/components/ChatSession";
 import { AuthProvider } from "@/auth";
 import { WorkbenchNavbar } from "@/components/WorkbenchNavbar";
 
@@ -18,6 +19,7 @@ export default function RootLayout({
       </head>
       <body>
         <AuthProvider>
+          <ChatSession />
           <WorkbenchNavbar />
           {children}
         </AuthProvider>

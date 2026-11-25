@@ -18,6 +18,11 @@ What must stay true? What are we deliberately leaving for later?
 
 What test, demo, or observation would show the outcome was achieved?
 
+- **What to measure.** Which metric or observation would show progress? Include a baseline and a target where useful.
+- **Why it matters.** What outcome does it reflect, or what decision will it inform?
+- **How to collect the data.** What source and method will you use, and when will you collect it?
+- **How to present the data.** Who needs to see it, and what format and comparison will make it easy to interpret?
+
 ## Open questions
 
 What still needs a decision? Which questions block the first slice?

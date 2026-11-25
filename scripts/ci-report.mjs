@@ -6,6 +6,8 @@ const checks = [
   ["Typecheck", process.env.TYPECHECK_STATUS],
   ["Unit tests and coverage", process.env.COVERAGE_STATUS],
   ["Type contract tests", process.env.TYPE_TEST_STATUS],
+  ["Worker protocol tests", process.env.WORKER_TEST_STATUS],
+  ["Firestore rules and integration tests", process.env.FIRESTORE_TEST_STATUS],
 ];
 const labels = new Map([
   ["success", "Passed"],

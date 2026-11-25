@@ -12,7 +12,7 @@ export type BrowserMetric =
     }
   | { kind: SaveKind; outcome: "ok" | "failed"; ms: number };
 
-export interface Latency {
+interface Latency {
   n: number;
   p50: number | null;
   p95: number | null;

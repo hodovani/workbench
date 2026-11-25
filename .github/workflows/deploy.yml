@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: "pnpm"
 
       - name: Setup Java for Firestore emulator
@@ -77,10 +77,18 @@ jobs:
         run: pnpm test:types
 
       - name: Worker protocol tests
+        id: worker-tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:worker
 
       - name: Firestore rules and repository integration tests
+        id: firestore-tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:integration
+
+      - name: Test CI report rendering and security thresholds
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.checkout.outcome == 'success' }}
+        run: node --test scripts/ci-report.test.mjs
 
       - name: Check Worker bundle
         run: pnpm worker:check
@@ -108,6 +116,8 @@ jobs:
           TYPECHECK_STATUS: ${{ steps.typecheck.outcome }}
           COVERAGE_STATUS: ${{ steps.coverage.outcome }}
           TYPE_TEST_STATUS: ${{ steps.type-tests.outcome }}
+          WORKER_TEST_STATUS: ${{ steps.worker-tests.outcome }}
+          FIRESTORE_TEST_STATUS: ${{ steps.firestore-tests.outcome }}
           CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [[ "$CHECKOUT_STATUS" == success ]]; then
@@ -115,33 +125,115 @@ jobs:
           else
             report=$(printf '## CI report\n\nChecks were skipped because checkout did not succeed.\n\n[Workflow run](%s)' "$CI_RUN_URL")
           fi
-          printf '%s\n' "$report" >> "$GITHUB_STEP_SUMMARY"
           delimiter=$(uuidgen)
           printf 'markdown<<%s\n%s\n%s\n' "$delimiter" "$report" "$delimiter" >> "$GITHUB_OUTPUT"
 
+  security:
+    name: Security
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      report: ${{ steps.security-report.outputs.markdown }}
+    env:
+      CODEQL_ACTION_DIFF_INFORMED_QUERIES: "false"
+      CODEQL_ACTION_OVERLAY_ANALYSIS: "false"
+    steps:
+      - name: Checkout proposed merge
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        with:
+          languages: javascript-typescript, actions
+          build-mode: none
+
+      - name: Analyze code and workflows
+        id: codeql
+        uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        with:
+          output: ${{ runner.temp }}/workbench-security
+          upload: never
+          upload-database: false
+
+      - name: Audit the full pnpm lockfile
+        id: osv
+        continue-on-error: ${{ vars.OSV_BLOCKING != 'true' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          results="$RUNNER_TEMP/workbench-security"
+          mkdir -p "$results"
+          scanner="$results/osv-scanner"
+          curl --fail --silent --show-error --location --retry 2 \
+            'https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64' \
+            --output "$scanner"
+          printf '%s  %s\n' 'fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8' "$scanner" | sha256sum --check
+          chmod +x "$scanner"
+          touch "$results/osv.toml"
+          status=0
+          "$scanner" scan --lockfile=pnpm-lock.yaml --config="$results/osv.toml" \
+            --format=sarif --output-file="$results/dependencies.sarif" || status=$?
+          printf 'exit-code=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          [[ "$status" == 0 || "$status" == 1 ]]
+
+      - name: Report findings and enforce thresholds
+        id: security-report
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          CODEQL_STATUS: ${{ steps.codeql.outcome }}
+          OSV_STATUS: ${{ steps.osv.outcome }}
+          OSV_BLOCKING: ${{ vars.OSV_BLOCKING }}
+          OSV_EXIT: ${{ steps.osv.outputs.exit-code }}
+        run: |
+          status=0
+          report=$(node scripts/security-report.mjs "$RUNNER_TEMP/workbench-security") || status=$?
+          delimiter=$(uuidgen)
+          printf 'markdown<<%s\n%s\n%s\n' "$delimiter" "$report" "$delimiter" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
   comment:
     name: Publish PR report
-    needs: build
-    if: >-
-      ${{ !cancelled() && github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' &&
-          needs.build.outputs.report != '' }}
+    needs: [build, security]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Publish the combined Actions summary
+        env:
+          CI_REPORT: ${{ needs.build.outputs.report }}
+          SECURITY_REPORT: ${{ needs.security.outputs.report }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          {
+            printf '%s\n\n' "${CI_REPORT:-CI results were unavailable.}"
+            printf 'Proposed merge commit: %s\n\n' "$GITHUB_SHA"
+            if [[ -n "$SECURITY_REPORT" ]]; then
+              printf '%s\n\n' "$SECURITY_REPORT"
+            else
+              printf '## Security\n\nScan results were unavailable.\n\n'
+            fi
+            printf '[Repository secret scanning alerts](%s/security/secret-scanning)\n' "$REPO_URL"
+          } > "$RUNNER_TEMP/ci-report.md"
+          cat "$RUNNER_TEMP/ci-report.md" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Update CI report comment
+        if: >-
+          ${{ github.event.pull_request.head.repo.full_name == github.repository &&
+              github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          CI_REPORT: ${{ needs.build.outputs.report }}
         run: |
           comment_ids=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- workbench-ci-report -->"))) | .id')
           comment_id=${comment_ids%%$'\n'*}
-          body=$(printf '<!-- workbench-ci-report -->\n%s\n' "$CI_REPORT")
+          body=$(printf '<!-- workbench-ci-report -->\n%s\n' "$(cat "$RUNNER_TEMP/ci-report.md")")
           if [[ -n "$comment_id" ]]; then
             gh api --silent --method PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body"
           else

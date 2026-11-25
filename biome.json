@@ -25,16 +25,30 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "a11y": { "recommended": true },
-      "complexity": { "recommended": true },
-      "correctness": { "recommended": true },
-      "performance": { "recommended": true },
-      "security": { "recommended": true },
-      "style": { "recommended": true },
-      "suspicious": { "recommended": true },
+      "preset": "recommended",
+      "a11y": {
+        "preset": "recommended"
+      },
+      "complexity": {
+        "preset": "recommended"
+      },
+      "correctness": {
+        "preset": "recommended"
+      },
+      "performance": {
+        "preset": "recommended"
+      },
+      "security": {
+        "preset": "recommended"
+      },
+      "style": {
+        "preset": "recommended",
+        "noInlineStyles": "error"
+      },
+      "suspicious": {
+        "preset": "recommended"
+      },
       "nursery": {
-        "noInlineStyles": "error",
         "noFloatingPromises": "error",
         "noMisusedPromises": "error"
       }
@@ -49,6 +63,11 @@
       "source": {
         "organizeImports": "on"
       }
+    }
+  },
+  "markdown": {
+    "formatter": {
+      "enabled": false
     }
   }
 }

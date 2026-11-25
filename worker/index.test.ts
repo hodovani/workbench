@@ -240,42 +240,45 @@ it.each([
     ],
   ],
   ["quota", null],
-] as const)("records %s independently of the HTTP success status", async (outcome, events) => {
-  const app = createWorker(
-    vi
-      .fn()
-      .mockResolvedValue(
-        events ? upstream([...events]) : new Response(null, { status: 429 }),
-      ),
-  );
-  const writes: unknown[][] = [];
-  const pending: Promise<unknown>[] = [];
-  const response = await app.fetch(
-    request({ messages: [{ role: "user", content: "private" }] }),
-    {
-      GEMINI_API_KEY: "private",
-      METRICS_DB: {
-        prepare() {
-          return {
-            bind(...values: unknown[]) {
-              return {
-                async run() {
-                  writes.push(values);
-                },
-              };
-            },
-          };
+] as const)(
+  "records %s independently of the HTTP success status",
+  async (outcome, events) => {
+    const app = createWorker(
+      vi
+        .fn()
+        .mockResolvedValue(
+          events ? upstream([...events]) : new Response(null, { status: 429 }),
+        ),
+    );
+    const writes: unknown[][] = [];
+    const pending: Promise<unknown>[] = [];
+    const response = await app.fetch(
+      request({ messages: [{ role: "user", content: "private" }] }),
+      {
+        GEMINI_API_KEY: "private",
+        METRICS_DB: {
+          prepare() {
+            return {
+              bind(...values: unknown[]) {
+                return {
+                  async run() {
+                    writes.push(values);
+                  },
+                };
+              },
+            };
+          },
         },
       },
-    },
-    { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
-  );
-  await response.text();
-  await Promise.all(pending);
-  expect(writes).toHaveLength(1);
-  expect(writes[0]?.slice(2, 4)).toEqual(["worker", outcome]);
-  expect(JSON.stringify(writes)).not.toContain("private");
-});
+      { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+    );
+    await response.text();
+    await Promise.all(pending);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.slice(2, 4)).toEqual(["worker", outcome]);
+    expect(JSON.stringify(writes)).not.toContain("private");
+  },
+);
 
 it("a failed telemetry write leaves the chat response intact", async () => {
   const log = vi.spyOn(console, "error").mockImplementation(() => {});

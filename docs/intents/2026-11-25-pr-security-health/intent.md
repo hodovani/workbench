@@ -1,6 +1,6 @@
 # Show Workbench security results on every PR
 
-Status: in progress
+Status: implemented
 
 ## Problem
 
@@ -26,5 +26,7 @@ None blocking implementation.
 
 ## Delivery
 
-- GitHub's repository API confirmed Secret Scanning and push protection are enabled. The PR and hosted verification evidence will be recorded during delivery.
+- GitHub's repository API confirmed Secret Scanning and push protection are enabled.
 - The checksum-verified OSV scan of the baseline read 944 packages and reported 9 high, 2 critical, and 19 lower-severity findings. The dependency lockfile is outside this reporting change.
+- [Draft PR #18](https://github.com/hodovani/workbench/pull/18) links to [dependency remediation issue #19](https://github.com/hodovani/workbench/issues/19).
+- [Hosted CI](https://github.com/hodovani/workbench/actions/runs/45588156546) passed the build and both CodeQL scans. The dependency findings failed the Security check and the [combined report](https://github.com/hodovani/workbench/pull/18#issuecomment-7158762303) still published.
